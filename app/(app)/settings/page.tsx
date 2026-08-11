@@ -1,12 +1,56 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useUserStore } from "@/store/user";
+import { useProgressStore } from "@/store/progress";
+import { Button } from "@/components/ui/Button";
+
 export default function SettingsPage() {
+  const router = useRouter();
+  const { profile, clearProfile } = useUserStore();
+  const { clearProgress } = useProgressStore();
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    clearProfile();
+    clearProgress();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <div className="px-4 pt-6 flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-gray-900">⚙️ Réglages</h1>
 
+      {/* Account */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-gray-700">Compte</h3>
+        {profile ? (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg">
+                {(profile.display_name ?? profile.email).charAt(0).toUpperCase()}
+              </div>
+              <div>
+                {profile.display_name && (
+                  <p className="text-sm font-semibold text-gray-800">{profile.display_name}</p>
+                )}
+                <p className="text-xs text-gray-500">{profile.email}</p>
+              </div>
+            </div>
+            <Button variant="danger" size="sm" onClick={handleLogout}>
+              Se déconnecter
+            </Button>
+          </>
+        ) : (
+          <p className="text-xs text-gray-400">Non connecté</p>
+        )}
+      </div>
+
+      {/* Context language */}
       <div className="flex flex-col gap-3">
-        {/* Context language */}
         <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Langue des situations</h3>
           <div className="flex gap-2">
