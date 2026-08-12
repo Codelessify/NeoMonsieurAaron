@@ -1,13 +1,11 @@
-// RunPod TTS integration
 // Expects a RunPod serverless endpoint running a French TTS model
 // (e.g. XTTS-v2, Coqui TTS, or Kokoro)
 // You can swap the endpoint URL to any compatible TTS API later.
 
 export interface TTSOptions {
   text: string;
-  language?: string;       // default "fr"
-  speaker?: string;        // voice ID / speaker name
-  speed?: number;          // 0.5 – 2.0, default 1.0
+  voice?: string;          // voice ID, default "lucy"
+  format?: string;         // output format, default "wav"
 }
 
 export interface TTSResult {
@@ -37,13 +35,12 @@ export async function generateTTS(options: TTSOptions): Promise<TTSResult> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      input: {
-        text: options.text,
-        language: options.language ?? "fr",
-        speaker: options.speaker ?? "default",
-        speed: options.speed ?? 1.0,
-      },
-    }),
+        input: {
+          prompt: options.text,
+          voice: options.voice ?? "lucy",
+          format: options.format ?? "wav",
+        },
+      }),
   });
 
   if (!response.ok) {

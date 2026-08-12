@@ -11,9 +11,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
       text: string;
-      language?: string;
-      speaker?: string;
-      speed?: number;
+      voice?: string;
+      format?: string;
     };
 
     if (!body.text) {
@@ -22,9 +21,8 @@ export async function POST(req: NextRequest) {
 
     const result = await generateTTS({
       text: body.text,
-      language: body.language ?? "fr",
-      speaker: body.speaker,
-      speed: body.speed,
+      voice: body.voice,
+      format: body.format,
     });
 
     return NextResponse.json({ audio_url: result.audio_url });
