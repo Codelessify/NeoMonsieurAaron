@@ -11,7 +11,7 @@ function getGroq(): Groq {
   return _groq;
 }
 
-const MODEL = "llama-3.3-70b-versatile";
+const MODEL = "llama-3.3-70b-specdec"; // supports json_schema structured outputs
 
 const EPISODE_SCHEMA = {
   type: "object" as const,
