@@ -38,8 +38,6 @@ const EPISODE_SCHEMA = {
           expected_response: { type: "string" as const },
           choices: {
             type: "array" as const,
-            minItems: 3,
-            maxItems: 3,
             items: {
               type: "object" as const,
               additionalProperties: false,
