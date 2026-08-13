@@ -23,8 +23,6 @@ const EPISODE_SCHEMA = {
     estimated_duration_minutes: { type: "integer" as const },
     scenes: {
       type: "array" as const,
-      minItems: 10,
-      maxItems: 10,
       items: {
         type: "object" as const,
         additionalProperties: false,
@@ -128,7 +126,7 @@ export async function generateEpisode(
       },
     },
     temperature: 0.8,
-    max_tokens: 4096,
+    max_tokens: 8192,
   });
 
   const raw = completion.choices[0]?.message?.content;
