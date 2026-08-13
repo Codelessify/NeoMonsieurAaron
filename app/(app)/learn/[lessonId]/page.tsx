@@ -131,11 +131,11 @@ export default function LessonPage({ params }: LessonPageProps) {
       {/* Info */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
-          <p className="text-2xl font-bold text-blue-600">5</p>
+          <p className="text-2xl font-bold text-blue-600">3</p>
           <p className="text-xs text-gray-500">scènes</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
-          <p className="text-2xl font-bold text-blue-600">~4</p>
+          <p className="text-2xl font-bold text-blue-600">~2</p>
           <p className="text-xs text-gray-500">minutes</p>
         </div>
       </div>

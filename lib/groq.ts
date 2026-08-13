@@ -77,7 +77,7 @@ Rules: target phrase must be the correct answer in at least 2 scenes; speaker al
 Target phrases: ${lesson.target_phrases.join(", ")}
 Known verbs: ${inventory.verbs.join(", ") || "none"}
 Known nouns: ${inventory.nouns.slice(0, 8).join(", ") || "none"}
-Generate 5 scenes as a short story. Keep each field brief.`,
+Generate 3 scenes as a short story. Keep each field brief.`,
       },
     ],
     response_format: {
@@ -89,7 +89,7 @@ Generate 5 scenes as a short story. Keep each field brief.`,
       },
     },
     temperature: 0.8,
-    max_tokens: 2000,
+    max_tokens: 2500,
   });
 
   const raw = completion.choices[0]?.message?.content;
