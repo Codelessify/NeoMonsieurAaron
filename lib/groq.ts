@@ -64,47 +64,37 @@ const EPISODE_SCHEMA = {
 };
 
 function buildSystemPrompt(): string {
-  return `You are an expert French curriculum designer with deep knowledge of Michel Thomas, Pimsleur, and Comprehensible Input methodology.
+  return `You are a French curriculum designer. Create one coherent conversational episode for a French learning app.
 
-Your task is to create one coherent conversational episode for a French language learning app.
-
-RULES — follow every rule exactly:
-1. Build ONE continuous story. Each scene must naturally lead into the next.
-2. The target phrase(s) must be the MOST NATURAL response in context — not just a possible response.
+Rules:
+1. Build ONE continuous story — each scene leads naturally to the next.
+2. Target phrase(s) must be the MOST NATURAL response in context.
 3. Use ONLY vocabulary from the learner's known inventory. Introduce at most 2 new words per scene.
-4. Every distractor answer must be grammatically correct and plausible in context — but clearly less appropriate than the correct answer.
-5. NEVER put English in the "speaker" field — the NPC always speaks French.
-6. The "goal" field is for your internal teaching intent only — the learner never sees it.
-7. The "illustration_prompt" should describe a soft watercolour scene for image generation. No text in image. Warm Parisian palette.
-8. The "audio_direction" should be a brief tone/speed cue for text-to-speech synthesis (e.g. "warm and friendly, moderate pace").
-9. The "teacher_note" should give a 1–2 sentence insight about the grammar or cultural context of the correct answer.
-10. Scenes should progress from recognition (easier) to production (harder) across the episode.`;
+4. Distractors must be grammatically correct but clearly less appropriate than the correct answer.
+5. The "speaker" field is always French — never English.
+6. "goal" is internal teaching intent only.
+7. "illustration_prompt": soft watercolour scene, no text, warm Parisian palette.
+8. "audio_direction": brief tone/speed cue for TTS (e.g. "warm, moderate pace").
+9. "teacher_note": 1-2 sentences on grammar or cultural context.
+10. Scenes progress from recognition (easier) to production (harder).`;
 }
 
 function buildUserPrompt(lesson: Lesson, inventory: LearnerInventory): string {
-  return `Lesson objective: ${lesson.objective}
+  return `Objective: ${lesson.objective}
+Theme: ${lesson.theme}
 
-Target phrase(s) — at least one must appear as the correct answer in multiple scenes:
+Target phrases (at least one must appear as correct answer in multiple scenes):
 ${lesson.target_phrases.map((p) => `- ${p}`).join("\n")}
 
-Learner's known vocabulary:
+Known vocabulary:
 Verbs: ${inventory.verbs.join(", ") || "none"}
-Nouns: ${inventory.nouns.slice(0, 30).join(", ") || "none"}
-Sentence patterns: ${inventory.sentence_patterns.slice(0, 10).join(", ") || "none"}
-Question patterns: ${inventory.question_patterns.join(", ") || "none"}
-Time expressions: ${inventory.time_expressions.join(", ") || "none"}
+Nouns: ${inventory.nouns.slice(0, 20).join(", ") || "none"}
+Patterns: ${inventory.sentence_patterns.slice(0, 6).join(", ") || "none"}
+Questions: ${inventory.question_patterns.join(", ") || "none"}
+Time: ${inventory.time_expressions.join(", ") || "none"}
 Connectors: ${inventory.connectors.join(", ") || "none"}
 
-Episode theme: ${lesson.theme}
-
-Story requirements:
-- Start in a home or familiar environment
-- Build naturally toward a situation that requires the target phrase(s)
-- Include at least one exchange with a named character
-- End with a satisfying resolution
-- Each scene should feel like a mini-moment in a real conversation
-
-Generate exactly 10 scenes.`;
+Generate exactly 10 scenes. Start in a familiar home setting, build toward a situation requiring the target phrase(s), include one named character, end with a satisfying resolution.`;
 }
 
 export async function generateEpisode(
@@ -126,7 +116,7 @@ export async function generateEpisode(
       },
     },
     temperature: 0.8,
-    max_tokens: 8192,
+    max_tokens: 6000,
   });
 
   const raw = completion.choices[0]?.message?.content;
