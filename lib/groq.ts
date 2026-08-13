@@ -11,7 +11,7 @@ function getGroq(): Groq {
   return _groq;
 }
 
-const MODEL = "openai/gpt-oss-120b"; // supports json_schema structured outputs
+const MODEL = "openai/gpt-oss-20b"; // supports json_schema structured outputs, 250K TPM free tier
 
 const EPISODE_SCHEMA = {
   type: "object" as const,
