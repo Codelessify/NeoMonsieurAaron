@@ -11,16 +11,14 @@ function getGroq(): Groq {
   return _groq;
 }
 
-const MODEL = "openai/gpt-oss-20b"; // supports json_schema structured outputs, 250K TPM free tier
+const MODEL = "openai/gpt-oss-20b"; // supports json_schema structured outputs
 
-const EPISODE_SCHEMA = {
+// Schema for a batch of scenes (used for two 5-scene calls)
+const SCENES_BATCH_SCHEMA = {
   type: "object" as const,
   additionalProperties: false,
-  required: ["episode_title", "theme", "estimated_duration_minutes", "scenes"],
+  required: ["scenes"],
   properties: {
-    episode_title: { type: "string" as const },
-    theme: { type: "string" as const },
-    estimated_duration_minutes: { type: "integer" as const },
     scenes: {
       type: "array" as const,
       items: {
@@ -63,64 +61,136 @@ const EPISODE_SCHEMA = {
   },
 };
 
+// Schema for episode metadata (title, theme, duration)
+const EPISODE_META_SCHEMA = {
+  type: "object" as const,
+  additionalProperties: false,
+  required: ["episode_title", "theme", "estimated_duration_minutes", "story_outline"],
+  properties: {
+    episode_title: { type: "string" as const },
+    theme: { type: "string" as const },
+    estimated_duration_minutes: { type: "integer" as const },
+    story_outline: { type: "string" as const },
+  },
+};
+
 function buildSystemPrompt(): string {
-  return `You are a French curriculum designer. Create one coherent conversational episode for a French learning app.
+  return `You are a French curriculum designer creating episodes for a French learning app.
 
 Rules:
-1. Build ONE continuous story — each scene leads naturally to the next.
-2. Target phrase(s) must be the MOST NATURAL response in context.
-3. Use ONLY vocabulary from the learner's known inventory. Introduce at most 2 new words per scene.
-4. Distractors must be grammatically correct but clearly less appropriate than the correct answer.
-5. The "speaker" field is always French — never English.
-6. "goal" is internal teaching intent only.
-7. "illustration_prompt": soft watercolour scene, no text, warm Parisian palette.
-8. "audio_direction": brief tone/speed cue for TTS (e.g. "warm, moderate pace").
-9. "teacher_note": 1-2 sentences on grammar or cultural context.
-10. Scenes progress from recognition (easier) to production (harder).`;
+1. Target phrase(s) must be the MOST NATURAL response in context.
+2. Use ONLY vocabulary from the learner's known inventory. Introduce at most 2 new words per scene.
+3. Distractors must be grammatically correct but clearly less appropriate than the correct answer.
+4. The "speaker" field is always French — never English.
+5. "goal" is internal teaching intent only.
+6. "illustration_prompt": soft watercolour scene, no text, warm Parisian palette.
+7. "audio_direction": brief tone/speed cue for TTS (e.g. "warm, moderate pace").
+8. "teacher_note": 1-2 sentences on grammar or cultural context.`;
 }
 
-function buildUserPrompt(lesson: Lesson, inventory: LearnerInventory): string {
-  return `Objective: ${lesson.objective}
-Theme: ${lesson.theme}
-
-Target phrases (at least one must appear as correct answer in multiple scenes):
-${lesson.target_phrases.map((p) => `- ${p}`).join("\n")}
-
-Known vocabulary:
+function buildVocabContext(inventory: LearnerInventory): string {
+  return `Known vocabulary:
 Verbs: ${inventory.verbs.join(", ") || "none"}
-Nouns: ${inventory.nouns.slice(0, 20).join(", ") || "none"}
-Patterns: ${inventory.sentence_patterns.slice(0, 6).join(", ") || "none"}
-Questions: ${inventory.question_patterns.join(", ") || "none"}
-Time: ${inventory.time_expressions.join(", ") || "none"}
-Connectors: ${inventory.connectors.join(", ") || "none"}
+Nouns: ${inventory.nouns.slice(0, 15).join(", ") || "none"}
+Patterns: ${inventory.sentence_patterns.slice(0, 5).join(", ") || "none"}
+Connectors: ${inventory.connectors.join(", ") || "none"}`;
+}
 
-Generate exactly 10 scenes. Start in a familiar home setting, build toward a situation requiring the target phrase(s), include one named character, end with a satisfying resolution.`;
+async function generateScenesBatch(
+  lesson: Lesson,
+  inventory: LearnerInventory,
+  sceneNumbers: number[],
+  storyContext: string
+): Promise<GroqEpisodeOutput["scenes"]> {
+  const isFirst = sceneNumbers[0] === 1;
+  const userPrompt = `Objective: ${lesson.objective}
+Theme: ${lesson.theme}
+Target phrases: ${lesson.target_phrases.join(", ")}
+
+${buildVocabContext(inventory)}
+
+Story context: ${storyContext}
+
+Generate scenes ${sceneNumbers[0]}–${sceneNumbers[sceneNumbers.length - 1]} (${sceneNumbers.length} scenes).
+${isFirst
+    ? "These are the opening scenes — start in a familiar home setting, introduce a named character, begin easy (recognition tasks)."
+    : "These are the closing scenes — build toward production tasks, include the target phrase(s) as correct answers, end with a satisfying resolution."
+  }
+Each scene must flow naturally from the previous one.`;
+
+  const completion = await getGroq().chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: buildSystemPrompt() },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "scenes_batch",
+        strict: true,
+        schema: SCENES_BATCH_SCHEMA,
+      },
+    },
+    temperature: 0.8,
+    max_tokens: 3500,
+  });
+
+  const raw = completion.choices[0]?.message?.content;
+  if (!raw) throw new Error("Groq returned empty content for scenes batch");
+  return (JSON.parse(raw) as { scenes: GroqEpisodeOutput["scenes"] }).scenes;
 }
 
 export async function generateEpisode(
   lesson: Lesson,
   inventory: LearnerInventory
 ): Promise<GroqEpisodeOutput> {
-  const completion = await getGroq().chat.completions.create({
+  // Step 1: generate episode metadata + story outline
+  const metaCompletion = await getGroq().chat.completions.create({
     model: MODEL,
     messages: [
       { role: "system", content: buildSystemPrompt() },
-      { role: "user", content: buildUserPrompt(lesson, inventory) },
+      {
+        role: "user",
+        content: `Create a short episode plan for a French lesson.
+Objective: ${lesson.objective}
+Theme: ${lesson.theme}
+Target phrases: ${lesson.target_phrases.join(", ")}
+
+Provide: episode_title, theme, estimated_duration_minutes (5-10), and a 2-3 sentence story_outline describing a 10-scene episode arc.`,
+      },
     ],
     response_format: {
       type: "json_schema",
       json_schema: {
-        name: "french_episode",
+        name: "episode_meta",
         strict: true,
-        schema: EPISODE_SCHEMA,
+        schema: EPISODE_META_SCHEMA,
       },
     },
     temperature: 0.8,
-    max_tokens: 6000,
+    max_tokens: 300,
   });
 
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw) throw new Error("Groq returned empty content");
+  const metaRaw = metaCompletion.choices[0]?.message?.content;
+  if (!metaRaw) throw new Error("Groq returned empty content for episode meta");
+  const meta = JSON.parse(metaRaw) as {
+    episode_title: string;
+    theme: string;
+    estimated_duration_minutes: number;
+    story_outline: string;
+  };
 
-  return JSON.parse(raw) as GroqEpisodeOutput;
+  // Step 2: generate scenes 1–5 and 6–10 in parallel
+  const [firstHalf, secondHalf] = await Promise.all([
+    generateScenesBatch(lesson, inventory, [1, 2, 3, 4, 5], meta.story_outline),
+    generateScenesBatch(lesson, inventory, [6, 7, 8, 9, 10], meta.story_outline),
+  ]);
+
+  return {
+    episode_title: meta.episode_title,
+    theme: meta.theme,
+    estimated_duration_minutes: meta.estimated_duration_minutes,
+    scenes: [...firstHalf, ...secondHalf],
+  };
 }
