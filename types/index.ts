@@ -31,7 +31,10 @@ export interface Scene {
   goal: string;                   // teaching intent (never shown to user)
   english_context: string;        // situation in English
   french_context: string;         // situation in French
-  speaker: string;                // NPC's spoken French line
+  character_name: string;         // NPC's name (e.g. "Marie", "Le vendeur")
+  dialogue: string;               // NPC's spoken French line
+  /** @deprecated use dialogue — kept for backward compat */
+  speaker?: string;
   expected_response: string;      // target phrase
   choices: AnswerChoice[];        // exactly 3
   new_vocabulary: string[];
@@ -158,7 +161,8 @@ export interface GroqEpisodeOutput {
     goal: string;
     english_context: string;
     french_context: string;
-    speaker: string;
+    character_name: string;
+    dialogue: string;
     expected_response: string;
     choices: Array<{ text: string; is_correct: boolean }>;
     new_vocabulary: string[];

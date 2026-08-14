@@ -11,7 +11,7 @@ function getGroq(): Groq {
 
 const MODEL = "openai/gpt-oss-20b";
 
-// MVP schema — absolute minimum fields the player renders
+// MVP schema
 const EPISODE_SCHEMA = {
   type: "object" as const,
   additionalProperties: false,
@@ -25,7 +25,8 @@ const EPISODE_SCHEMA = {
         additionalProperties: false,
         required: [
           "english_context",
-          "speaker",
+          "character_name",
+          "dialogue",
           "expected_response",
           "choices",
           "teacher_note",
@@ -33,8 +34,13 @@ const EPISODE_SCHEMA = {
           "new_vocabulary",
         ],
         properties: {
+          // Brief English description of the situation
           english_context: { type: "string" as const },
-          speaker: { type: "string" as const },
+          // The NPC's name, e.g. "Marie", "Le vendeur", "Le professeur"
+          character_name: { type: "string" as const },
+          // The NPC's actual spoken French line (the dialogue the learner hears)
+          dialogue: { type: "string" as const },
+          // The correct French response the learner should produce
           expected_response: { type: "string" as const },
           choices: {
             type: "array" as const,
@@ -66,16 +72,26 @@ export async function generateEpisode(
     messages: [
       {
         role: "system",
-        content: `French curriculum designer. Create a 5-scene quiz episode.
-Rules: target phrase must be the correct answer in at least 2 scenes; speaker always speaks French; distractors are plausible but wrong; teacher_note is 1 short sentence; grammar_focus is 2-4 words; new_vocabulary is 0-2 words.`,
+        content: `You are a French language curriculum designer. Create a short conversational episode where the learner practices responding in French.
+
+Rules:
+- Each scene has a NAMED character (e.g. "Marie", "Le vendeur", "Le professeur") who says something in French ("dialogue").
+- The learner must reply. The correct reply is "expected_response". Provide 3 choices total (1 correct, 2 plausible but wrong).
+- "english_context" is a brief English stage direction, e.g. "Marie greets you at the door."
+- The target phrase(s) must appear as the correct answer in at least 2 scenes.
+- teacher_note: 1 short English sentence explaining the grammar.
+- grammar_focus: 2-4 words naming the grammar point.
+- new_vocabulary: 0-2 new French words introduced in this scene.
+- Keep all fields short. The whole story should feel like a natural real-life conversation.`,
       },
       {
         role: "user",
-        content: `Objective: ${lesson.objective}
-Target phrases: ${lesson.target_phrases.join(", ")}
+        content: `Lesson objective: ${lesson.objective}
+Target phrases the learner must practice: ${lesson.target_phrases.join(", ")}
 Known verbs: ${inventory.verbs.join(", ") || "none"}
 Known nouns: ${inventory.nouns.slice(0, 8).join(", ") || "none"}
-Generate 3 scenes as a short story. Keep each field brief.`,
+
+Generate exactly 3 scenes as one continuous short story. Invent a consistent character who appears across scenes.`,
       },
     ],
     response_format: {
@@ -97,7 +113,8 @@ Generate 3 scenes as a short story. Keep each field brief.`,
     episode_title: string;
     scenes: Array<{
       english_context: string;
-      speaker: string;
+      character_name: string;
+      dialogue: string;
       expected_response: string;
       choices: Array<{ text: string; is_correct: boolean }>;
       teacher_note: string;
@@ -106,7 +123,6 @@ Generate 3 scenes as a short story. Keep each field brief.`,
     }>;
   };
 
-  // Backfill all fields required by the Episode/Scene types
   return {
     episode_title: parsed.episode_title,
     theme: lesson.theme,
@@ -115,7 +131,8 @@ Generate 3 scenes as a short story. Keep each field brief.`,
       scene_number: i + 1,
       english_context: s.english_context,
       french_context: "",
-      speaker: s.speaker,
+      character_name: s.character_name,
+      dialogue: s.dialogue,
       expected_response: s.expected_response,
       choices: s.choices,
       new_vocabulary: s.new_vocabulary,

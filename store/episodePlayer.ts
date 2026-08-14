@@ -44,7 +44,7 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
     // Fire TTS requests for all scenes in the background.
     // As each resolves, patch audio_url onto the scene in the store.
     episode.scenes.forEach((scene, i) => {
-      fetchAudioForScene(scene.speaker).then((audio_url) => {
+      fetchAudioForScene(scene.dialogue ?? scene.speaker ?? "").then((audio_url) => {
         if (!audio_url) return;
         const current = get().episode;
         if (!current) return;

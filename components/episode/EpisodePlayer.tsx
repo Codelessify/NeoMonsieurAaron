@@ -10,6 +10,7 @@ import { AudioPlayer } from "@/components/ui/AudioPlayer";
 import { AnswerChoices } from "@/components/episode/AnswerChoices";
 import { TeacherNote } from "@/components/episode/TeacherNote";
 import { SceneIllustration } from "@/components/episode/SceneIllustration";
+import { MicButton } from "@/components/episode/MicButton";
 import { useMemo } from "react";
 import type { AnswerChoice } from "@/types";
 
@@ -153,11 +154,16 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
               👤
             </div>
             <div className="flex-1">
-              <p className="text-base font-semibold text-gray-900">{scene.speaker}</p>
+              <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-0.5">
+                {scene.character_name ?? scene.speaker}
+              </p>
+              <p className="text-base font-semibold text-gray-900">
+                {scene.dialogue ?? scene.speaker}
+              </p>
               <div className="mt-1">
                 <AudioPlayer
                   src={scene.audio_url}
-                  text={scene.speaker}
+                  text={scene.dialogue ?? scene.speaker}
                   autoPlay={false}
                   label="Écouter"
                 />
@@ -174,6 +180,19 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
         status={scene_status}
         onSelect={selectChoice}
       />
+
+      {/* Mic input — shown while unanswered */}
+      {!isAnswered && (
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-100" />
+          <MicButton
+            choices={shuffledChoices}
+            onMatch={selectChoice}
+            disabled={isAnswered}
+          />
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+      )}
 
       {/* Teacher note (shown after answering) */}
       <AnimatePresence>
