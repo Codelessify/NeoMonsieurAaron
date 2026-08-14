@@ -157,6 +157,7 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
               <div className="mt-1">
                 <AudioPlayer
                   src={scene.audio_url}
+                  text={scene.speaker}
                   autoPlay={false}
                   label="Écouter"
                 />
