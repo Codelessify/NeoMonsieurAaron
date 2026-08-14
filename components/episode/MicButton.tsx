@@ -3,10 +3,33 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
+// Browser Speech Recognition type shim
+interface ISpeechRecognitionEvent {
+  results: { length: number; [i: number]: { length: number; [j: number]: { transcript: string } } };
+}
+interface ISpeechRecognition extends EventTarget {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: ISpeechRecognitionEvent) => void) | null;
+}
+interface ISpeechRecognitionConstructor {
+  new (): ISpeechRecognition;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: ISpeechRecognitionConstructor;
+    webkitSpeechRecognition?: ISpeechRecognitionConstructor;
+  }
+}
+
 interface MicButtonProps {
-  /** The choices the learner can say. Matched by similarity. */
   choices: Array<{ text: string; is_correct: boolean }>;
-  /** Called with the index of the matched choice */
   onMatch: (index: number) => void;
   disabled?: boolean;
   className?: string;
@@ -14,7 +37,7 @@ interface MicButtonProps {
 
 type MicStatus = "idle" | "listening" | "matched" | "no_match" | "unsupported";
 
-// Normalize French text for comparison: lowercase, strip accents, trim punctuation
+// Normalize French text: lowercase, strip accents and punctuation
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -24,7 +47,6 @@ function normalize(s: string): string {
     .trim();
 }
 
-// Find the best matching choice for what was heard
 function findMatch(
   transcript: string,
   choices: Array<{ text: string; is_correct: boolean }>
@@ -37,13 +59,10 @@ function findMatch(
 
   choices.forEach((choice, i) => {
     const choiceNorm = normalize(choice.text);
-    // Score: count shared words
     const heardWords = new Set(heard.split(/\s+/));
     const choiceWords = choiceNorm.split(/\s+/);
     const matches = choiceWords.filter((w) => heardWords.has(w)).length;
     const score = choiceWords.length > 0 ? matches / choiceWords.length : 0;
-
-    // Also check if transcript contains the whole choice or vice versa
     const contains = heard.includes(choiceNorm) || choiceNorm.includes(heard);
     const finalScore = contains ? 1 : score;
 
@@ -53,37 +72,26 @@ function findMatch(
     }
   });
 
-  // Require at least 50% word overlap to count as a match
   return bestScore >= 0.5 ? bestIndex : null;
 }
 
 export function MicButton({ choices, onMatch, disabled = false, className }: MicButtonProps) {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const [status, setStatus] = useState<MicStatus>("idle");
   const [transcript, setTranscript] = useState("");
 
-  // Check browser support once on mount
   useEffect(() => {
-    const SpeechRecognition =
-      (typeof window !== "undefined" &&
-        (window.SpeechRecognition || (window as Window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)) ||
-      null;
-    if (!SpeechRecognition) setStatus("unsupported");
+    if (typeof window !== "undefined" && !window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      setStatus("unsupported");
+    }
   }, []);
 
   const startListening = useCallback(() => {
-    if (disabled || status === "listening") return;
+    if (disabled) return;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SR) { setStatus("unsupported"); return; }
 
-    const SpeechRecognition =
-      window.SpeechRecognition ||
-      (window as Window & { webkitSpeechRecognition?: typeof window.SpeechRecognition }).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setStatus("unsupported");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
+    const recognition = new SR();
     recognition.lang = "fr-FR";
     recognition.interimResults = false;
     recognition.maxAlternatives = 3;
@@ -95,7 +103,6 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
     };
 
     recognition.onresult = (event) => {
-      // Collect all alternatives across all results
       const transcripts: string[] = [];
       for (let r = 0; r < event.results.length; r++) {
         for (let a = 0; a < event.results[r].length; a++) {
@@ -109,29 +116,24 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
         if (matched !== null) break;
       }
 
-      const bestTranscript = transcripts[0] ?? "";
-      setTranscript(bestTranscript);
+      setTranscript(transcripts[0] ?? "");
 
       if (matched !== null) {
         setStatus("matched");
         onMatch(matched);
       } else {
         setStatus("no_match");
-        // Reset after a moment so they can try again
         setTimeout(() => setStatus("idle"), 1500);
       }
     };
 
-    recognition.onerror = () => {
-      setStatus("idle");
-    };
-
+    recognition.onerror = () => setStatus("idle");
     recognition.onend = () => {
-      if (status === "listening") setStatus("idle");
+      setStatus((prev) => (prev === "listening" ? "idle" : prev));
     };
 
     recognition.start();
-  }, [choices, disabled, onMatch, status]);
+  }, [choices, disabled, onMatch]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
