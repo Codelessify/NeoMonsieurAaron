@@ -1,68 +1,53 @@
-// RunPod managed FLUX Schnell endpoint for scene illustration generation.
-// Endpoint: https://api.runpod.ai/v2/black-forest-labs-flux-1-schnell/runsync
+// Replicate FLUX Schnell endpoint for scene illustration generation.
+// Docs: https://replicate.com/black-forest-labs/flux-schnell
 
 const STYLE_PREFIX =
-  "soft watercolour illustration, warm Parisian colours, French lifestyle, minimal detail, flat design, no text, no words, cozy atmosphere";
-
-const NEGATIVE_PROMPT =
-  "photorealistic, photo, 3d render, ugly, blurry, text, watermark, signature, border, frame";
+  "soft watercolour illustration, warm Parisian colours, French lifestyle, no text, no words, cozy atmosphere";
 
 export async function generateSceneIllustration(
   illustrationPrompt: string
 ): Promise<string> {
-  const apiKey = process.env.RUNPOD_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("RUNPOD_API_KEY is not set");
-  }
+  const apiKey = process.env.REPLICATE_API_TOKEN;
+  if (!apiKey) throw new Error("REPLICATE_API_TOKEN is not set");
 
   const prompt = `${STYLE_PREFIX}, ${illustrationPrompt}`;
 
-  const response = await fetch(
-    "https://api.runpod.ai/v2/black-forest-labs-flux-1-schnell/runsync",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  // Use the synchronous predictions endpoint with FLUX Schnell
+  const response = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      Prefer: "wait", // wait for result synchronously (up to 60s)
+    },
+    body: JSON.stringify({
+      input: {
+        prompt,
+        num_outputs: 1,
+        aspect_ratio: "16:9",
+        output_format: "webp",
+        output_quality: 80,
+        num_inference_steps: 4,
       },
-      body: JSON.stringify({
-        input: {
-          prompt,
-          negative_prompt: NEGATIVE_PROMPT,
-          seed: -1,
-          num_inference_steps: 4,
-          guidance: 7,
-          image_format: "png",
-          width: 1024,
-          height: 576, // 16:9 aspect ratio
-        },
-      }),
-    }
-  );
+    }),
+  });
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`RunPod image error ${response.status}: ${err}`);
+    throw new Error(`Replicate image error ${response.status}: ${err}`);
   }
 
   const data = await response.json() as {
     id: string;
     status: string;
-    output?: string | { image_url?: string; url?: string };
-    error?: string;
+    output?: string[];
+    error?: string | null;
   };
 
-  if (data.status === "FAILED" || data.error) {
-    throw new Error(`RunPod image job failed: ${data.error ?? "unknown error"}`);
-  }
+  if (data.error) throw new Error(`Replicate image failed: ${data.error}`);
 
-  // Support both direct URL string and object with image_url/url
-  if (typeof data.output === "string") return data.output;
-  if (data.output && typeof data.output === "object") {
-    const url = data.output.image_url ?? data.output.url;
-    if (url) return url;
-  }
+  const url = data.output?.[0];
+  if (!url) throw new Error("Replicate returned no image URL");
 
-  throw new Error("RunPod image returned no output URL");
+  return url;
 }
