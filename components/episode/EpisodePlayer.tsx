@@ -11,7 +11,7 @@ import { AnswerChoices } from "@/components/episode/AnswerChoices";
 import { TeacherNote } from "@/components/episode/TeacherNote";
 import { SceneIllustration } from "@/components/episode/SceneIllustration";
 import { MicButton } from "@/components/episode/MicButton";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import type { AnswerChoice } from "@/types";
 
 interface EpisodePlayerProps {
@@ -33,6 +33,14 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
   } = useEpisodePlayer();
 
   const { markComplete } = useProgressStore();
+
+  // Persist progress once when episode completes — not during render
+  useEffect(() => {
+    if (is_complete && episode) {
+      markComplete(episode.lesson_id, correct_count, episode.scenes.length);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [is_complete]);
 
   // Shuffle choices once per scene render (stable via useMemo on scene_number)
   const scene = episode?.scenes[current_scene_index];
@@ -63,9 +71,6 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
     const total = episode.scenes.length;
     const pct = Math.round((correct_count / total) * 100);
     const grade = scoreToGrade(correct_count, total);
-
-    // Persist progress
-    markComplete(episode.lesson_id, correct_count, total);
 
     return (
       <motion.div

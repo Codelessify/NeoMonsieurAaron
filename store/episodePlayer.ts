@@ -35,14 +35,29 @@ async function fetchAudioForScene(text: string): Promise<string | null> {
   }
 }
 
+async function fetchImageForScene(prompt: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/media/image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { url: string | null };
+    return data.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
   ...INITIAL_STATE,
 
   loadEpisode: (episode) => {
     set({ ...INITIAL_STATE, episode, is_loading: false });
 
-    // Fire TTS requests for all scenes in the background.
-    // As each resolves, patch audio_url onto the scene in the store.
+    // Fire TTS + image requests for all scenes in the background.
+    // As each resolves, patch the url onto the scene in the store.
     episode.scenes.forEach((scene, i) => {
       fetchAudioForScene(scene.dialogue ?? scene.speaker ?? "").then((audio_url) => {
         if (!audio_url) return;
@@ -53,6 +68,18 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
         );
         set({ episode: { ...current, scenes: updatedScenes } });
       });
+
+      if (scene.illustration_prompt) {
+        fetchImageForScene(scene.illustration_prompt).then((illustration_url) => {
+          if (!illustration_url) return;
+          const current = get().episode;
+          if (!current) return;
+          const updatedScenes = current.scenes.map((s, j) =>
+            j === i ? { ...s, illustration_url } : s
+          );
+          set({ episode: { ...current, scenes: updatedScenes } });
+        });
+      }
     });
   },
 

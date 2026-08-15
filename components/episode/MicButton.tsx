@@ -35,7 +35,7 @@ interface MicButtonProps {
   className?: string;
 }
 
-type MicStatus = "idle" | "listening" | "matched" | "no_match" | "unsupported";
+type MicStatus = "idle" | "listening" | "processing" | "matched" | "no_match" | "unsupported";
 
 // Normalize French text: lowercase, strip accents and punctuation
 function normalize(s: string): string {
@@ -103,6 +103,7 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
     };
 
     recognition.onresult = (event) => {
+      setStatus("processing");
       const transcripts: string[] = [];
       for (let r = 0; r < event.results.length; r++) {
         for (let a = 0; a < event.results[r].length; a++) {
@@ -129,7 +130,7 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
 
     recognition.onerror = () => setStatus("idle");
     recognition.onend = () => {
-      setStatus((prev) => (prev === "listening" ? "idle" : prev));
+      setStatus((prev) => (prev === "listening" ? "processing" : prev));
     };
 
     recognition.start();
@@ -143,17 +144,18 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
   if (status === "unsupported") return null;
 
   const isListening = status === "listening";
+  const isProcessing = status === "processing";
 
   return (
     <div className={cn("flex flex-col items-center gap-1", className)}>
       <button
         onClick={isListening ? stopListening : startListening}
-        disabled={disabled}
+        disabled={disabled || isProcessing}
         aria-label={isListening ? "Arrêter le micro" : "Répondre avec le micro"}
         className={cn(
           "w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-200 shadow-sm",
-          disabled
-            ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-40"
+          disabled || isProcessing
+            ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
             : isListening
             ? "border-red-400 bg-red-50 animate-pulse cursor-pointer"
             : status === "matched"
@@ -163,14 +165,20 @@ export function MicButton({ choices, onMatch, disabled = false, className }: Mic
             : "border-indigo-300 bg-indigo-50 hover:bg-indigo-100 cursor-pointer"
         )}
       >
-        <span className="text-2xl">
-          {isListening ? "🔴" : status === "matched" ? "✅" : status === "no_match" ? "🤔" : "🎤"}
-        </span>
+        {isProcessing ? (
+          <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <span className="text-2xl">
+            {isListening ? "🔴" : status === "matched" ? "✅" : status === "no_match" ? "🤔" : "🎤"}
+          </span>
+        )}
       </button>
 
       <p className="text-xs text-gray-400 text-center min-h-[16px]">
         {isListening
           ? "À vous…"
+          : isProcessing
+          ? "Analyse…"
           : status === "no_match"
           ? `"${transcript}" — réessayez`
           : "Parler"}

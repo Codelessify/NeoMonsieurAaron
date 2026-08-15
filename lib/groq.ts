@@ -139,7 +139,8 @@ Generate exactly 3 scenes as one continuous short story. Invent a consistent cha
       grammar_focus: s.grammar_focus,
       teacher_note: s.teacher_note,
       audio_direction: "",
-      illustration_prompt: "",
+      // Generate illustration prompt from scene context — avoids extra Groq tokens
+      illustration_prompt: `${s.english_context} ${s.character_name} speaking French. Soft watercolour, warm Parisian palette.`,
       goal: "",
     })),
   };
