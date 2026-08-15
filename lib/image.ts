@@ -43,6 +43,7 @@ export async function generateSceneIllustration(
     id: string;
     status: string;
     output?: {
+      result?: string;
       image_url?: string;
       url?: string;
     } | string;
@@ -53,10 +54,10 @@ export async function generateSceneIllustration(
     throw new Error(`RunPod image failed: ${data.error ?? "unknown error"}`);
   }
 
-  // Response shape: { output: { image_url: "https://..." } }
+  // Actual response shape: { output: { result: "https://..." } }
   if (typeof data.output === "string") return data.output;
   if (data.output && typeof data.output === "object") {
-    const url = data.output.image_url ?? data.output.url;
+    const url = data.output.result ?? data.output.image_url ?? data.output.url;
     if (url) return url;
   }
 
