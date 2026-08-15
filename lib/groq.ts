@@ -11,7 +11,9 @@ function getGroq(): Groq {
 
 const MODEL = "openai/gpt-oss-20b";
 
-// MVP schema
+// Core fields only in required — optional enrichment fields left out so
+// the model can omit them if it runs close to the token limit.
+// strict: false to allow optional properties.
 const EPISODE_SCHEMA = {
   type: "object" as const,
   additionalProperties: false,
@@ -29,18 +31,11 @@ const EPISODE_SCHEMA = {
           "dialogue",
           "expected_response",
           "choices",
-          "teacher_note",
-          "grammar_focus",
-          "new_vocabulary",
         ],
         properties: {
-          // Brief English description of the situation
           english_context: { type: "string" as const },
-          // The NPC's name, e.g. "Marie", "Le vendeur", "Le professeur"
           character_name: { type: "string" as const },
-          // The NPC's actual spoken French line (the dialogue the learner hears)
           dialogue: { type: "string" as const },
-          // The correct French response the learner should produce
           expected_response: { type: "string" as const },
           choices: {
             type: "array" as const,
@@ -72,33 +67,33 @@ export async function generateEpisode(
     messages: [
       {
         role: "system",
-        content: `You are a French language curriculum designer. Create a short conversational episode where the learner practices responding in French.
+        content: `French curriculum designer. Create a 3-scene conversational episode for a French learner.
 
-Rules:
-- Each scene has a NAMED character (e.g. "Marie", "Le vendeur", "Le professeur") who says something in French ("dialogue").
-- The learner must reply. The correct reply is "expected_response". Provide 3 choices total (1 correct, 2 plausible but wrong).
-- "english_context" is a brief English stage direction, e.g. "Marie greets you at the door."
-- The target phrase(s) must appear as the correct answer in at least 2 scenes.
-- teacher_note: 1 short English sentence explaining the grammar.
-- grammar_focus: 2-4 words naming the grammar point.
-- new_vocabulary: 0-2 new French words introduced in this scene.
-- Keep all fields short. The whole story should feel like a natural real-life conversation.`,
+Each scene: a named character speaks French, the learner must choose the correct French reply.
+- character_name: short name like "Marie" or "Le vendeur"
+- dialogue: the character's French sentence
+- english_context: one English sentence describing the situation
+- expected_response: the correct French reply
+- choices: exactly 3 options (1 correct, 2 wrong but plausible)
+- teacher_note: one short English sentence on the grammar (optional)
+- grammar_focus: 2-4 word grammar label (optional)
+- new_vocabulary: 0-2 new words (optional)
+Keep every field short.`,
       },
       {
         role: "user",
-        content: `Lesson objective: ${lesson.objective}
-Target phrases the learner must practice: ${lesson.target_phrases.join(", ")}
+        content: `Objective: ${lesson.objective}
+Target phrases: ${lesson.target_phrases.join(", ")}
 Known verbs: ${inventory.verbs.join(", ") || "none"}
 Known nouns: ${inventory.nouns.slice(0, 8).join(", ") || "none"}
-
-Generate exactly 3 scenes as one continuous short story. Invent a consistent character who appears across scenes.`,
+Generate exactly 3 scenes as one continuous story with a consistent character.`,
       },
     ],
     response_format: {
       type: "json_schema",
       json_schema: {
         name: "french_episode",
-        strict: true,
+        strict: false,
         schema: EPISODE_SCHEMA,
       },
     },
@@ -117,9 +112,9 @@ Generate exactly 3 scenes as one continuous short story. Invent a consistent cha
       dialogue: string;
       expected_response: string;
       choices: Array<{ text: string; is_correct: boolean }>;
-      teacher_note: string;
-      grammar_focus: string;
-      new_vocabulary: string[];
+      teacher_note?: string;
+      grammar_focus?: string;
+      new_vocabulary?: string[];
     }>;
   };
 
@@ -135,11 +130,10 @@ Generate exactly 3 scenes as one continuous short story. Invent a consistent cha
       dialogue: s.dialogue,
       expected_response: s.expected_response,
       choices: s.choices,
-      new_vocabulary: s.new_vocabulary,
-      grammar_focus: s.grammar_focus,
-      teacher_note: s.teacher_note,
+      new_vocabulary: s.new_vocabulary ?? [],
+      grammar_focus: s.grammar_focus ?? "",
+      teacher_note: s.teacher_note ?? "",
       audio_direction: "",
-      // Generate illustration prompt from scene context — avoids extra Groq tokens
       illustration_prompt: `${s.english_context} ${s.character_name} speaking French. Soft watercolour, warm Parisian palette.`,
       goal: "",
     })),
