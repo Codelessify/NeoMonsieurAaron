@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateSceneIllustration } from "@/lib/image";
 
 export async function POST(req: NextRequest) {
-  // If Replicate is not configured, return null gracefully —
+  // If RunPod is not configured, return null gracefully —
   // the player will show the emoji placeholder instead.
-  if (!process.env.REPLICATE_API_TOKEN) {
+  if (!process.env.RUNPOD_API_KEY) {
     return NextResponse.json({ url: null });
   }
 
