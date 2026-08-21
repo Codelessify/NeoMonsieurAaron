@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEpisode } from "@/lib/groq";
 import { getLessonById, getKnownInventoryForLesson } from "@/lib/curriculum";
+import { createClient } from "@/lib/supabase/server";
 import type { Episode, GroqEpisodeOutput } from "@/types";
 import crypto from "crypto";
 
@@ -17,8 +18,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
     }
 
+    // Get user's context language preference from Supabase
+    let contextLanguage: "english" | "french" | "mixed" = "english";
+    if (body.user_id) {
+      try {
+        const supabase = await createClient();
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("context_language")
+          .eq("id", body.user_id)
+          .single();
+        if (profile?.context_language) {
+          contextLanguage = profile.context_language;
+        }
+      } catch (err) {
+        console.error("[generate-episode] failed to load user context language", err);
+      }
+    }
+
     const inventory = getKnownInventoryForLesson(body.lesson_id);
-    const raw: GroqEpisodeOutput = await generateEpisode(found.lesson, inventory);
+    const raw: GroqEpisodeOutput = await generateEpisode(found.lesson, inventory, contextLanguage);
 
     const episode: Episode = {
       id: crypto.randomUUID(),

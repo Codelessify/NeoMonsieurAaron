@@ -37,6 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       setProfile(profile);
       await loadFromSupabase(user.id);
+      // Update streak on login
+      useUserStore.getState().updateStreak();
     }
 
     init();

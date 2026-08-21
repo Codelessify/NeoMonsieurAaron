@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEpisodePlayer } from "@/store/episodePlayer";
 import { useProgressStore } from "@/store/progress";
+import { useUserStore } from "@/store/user";
 import { shuffle, scoreToGrade } from "@/lib/utils";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Button } from "@/components/ui/Button";
@@ -33,11 +34,12 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
   } = useEpisodePlayer();
 
   const { markComplete } = useProgressStore();
+  const { profile } = useUserStore();
 
   // Persist progress once when episode completes — not during render
   useEffect(() => {
     if (is_complete && episode) {
-      markComplete(episode.lesson_id, correct_count, episode.scenes.length);
+      markComplete(episode.lesson_id, correct_count, episode.scenes.length, profile?.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [is_complete]);
@@ -168,7 +170,7 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
               <div className="mt-1">
                 <AudioPlayer
                   src={scene.audio_url}
-                  autoPlay={false}
+                  autoPlay={profile?.audio_autoplay ?? false}
                   label="Écouter"
                 />
               </div>

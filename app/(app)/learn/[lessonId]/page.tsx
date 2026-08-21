@@ -3,6 +3,7 @@
 import { use, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useEpisodePlayer } from "@/store/episodePlayer";
+import { useUserStore } from "@/store/user";
 import { EpisodePlayer } from "@/components/episode/EpisodePlayer";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -17,6 +18,7 @@ export default function LessonPage({ params }: LessonPageProps) {
   const { lessonId } = use(params);
   const router = useRouter();
   const { episode, is_loading, loadEpisode, resetPlayer } = useEpisodePlayer();
+  const { profile } = useUserStore();
   const [error, setError] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
 
@@ -33,7 +35,7 @@ export default function LessonPage({ params }: LessonPageProps) {
       const res = await fetch("/api/episode/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lesson_id: lessonId }),
+        body: JSON.stringify({ lesson_id: lessonId, user_id: profile?.id }),
       });
 
       if (!res.ok) {

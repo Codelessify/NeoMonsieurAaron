@@ -5,10 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { useUserStore } from "@/store/user";
 import { useProgressStore } from "@/store/progress";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, clearProfile } = useUserStore();
+  const { profile, clearProfile, updateContextLanguage, updateDailyGoal, updateAudioAutoplay } = useUserStore();
   const { clearProgress } = useProgressStore();
 
   async function handleLogout() {
@@ -19,6 +20,10 @@ export default function SettingsPage() {
     router.push("/login");
     router.refresh();
   }
+
+  const contextLanguage = profile?.context_language ?? "english";
+  const dailyGoal = profile?.daily_goal_minutes ?? 10;
+  const audioAutoplay = profile?.audio_autoplay ?? true;
 
   return (
     <div className="px-4 pt-6 flex flex-col gap-6">
@@ -54,10 +59,16 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Langue des situations</h3>
           <div className="flex gap-2">
-            {["english", "mixed", "french"].map((opt) => (
+            {(["english", "mixed", "french"] as const).map((opt) => (
               <button
                 key={opt}
-                className="flex-1 py-2 rounded-xl border-2 text-xs font-semibold capitalize transition-all border-gray-200 text-gray-500 hover:border-blue-300"
+                onClick={() => updateContextLanguage(opt)}
+                className={cn(
+                  "flex-1 py-2 rounded-xl border-2 text-xs font-semibold capitalize transition-all",
+                  contextLanguage === opt
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-200 text-gray-500 hover:border-blue-300"
+                )}
               >
                 {opt === "english" ? "Anglais" : opt === "french" ? "Français" : "Mixte"}
               </button>
@@ -75,7 +86,13 @@ export default function SettingsPage() {
             {[5, 10, 15, 30].map((mins) => (
               <button
                 key={mins}
-                className="flex-1 py-2 rounded-xl border-2 text-xs font-semibold transition-all border-gray-200 text-gray-500 hover:border-blue-300"
+                onClick={() => updateDailyGoal(mins)}
+                className={cn(
+                  "flex-1 py-2 rounded-xl border-2 text-xs font-semibold transition-all",
+                  dailyGoal === mins
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-200 text-gray-500 hover:border-blue-300"
+                )}
               >
                 {mins} min
               </button>
@@ -87,11 +104,23 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Lecture auto</h3>
-            <p className="text-xs text-gray-400">Jouer l&apos;audio automatiquement à chaque scène</p>
+            <p className="text-xs text-gray-400">Jouer l'audio automatiquement à chaque scène</p>
           </div>
-          <div className="w-10 h-6 bg-blue-500 rounded-full relative cursor-pointer">
-            <div className="absolute right-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow" />
-          </div>
+          <button
+            onClick={() => updateAudioAutoplay(!audioAutoplay)}
+            className={cn(
+              "w-10 h-6 rounded-full relative transition-colors",
+              audioAutoplay ? "bg-blue-500" : "bg-gray-300"
+            )}
+            aria-label="Toggle auto-play"
+          >
+            <div
+              className={cn(
+                "absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all",
+                audioAutoplay ? "right-0.5" : "left-0.5"
+              )}
+            />
+          </button>
         </div>
 
         {/* About */}

@@ -60,8 +60,16 @@ const EPISODE_SCHEMA = {
 
 export async function generateEpisode(
   lesson: Lesson,
-  inventory: LearnerInventory
+  inventory: LearnerInventory,
+  contextLanguage: "english" | "french" | "mixed" = "english"
 ): Promise<GroqEpisodeOutput> {
+  const contextInstruction =
+    contextLanguage === "french"
+      ? "Write the english_context field in French."
+      : contextLanguage === "mixed"
+      ? "Write the english_context field in a mix of English and French (start in English, gradually introduce French)."
+      : "Write the english_context field in English.";
+
   const completion = await getGroq().chat.completions.create({
     model: MODEL,
     messages: [
@@ -72,7 +80,7 @@ export async function generateEpisode(
 Each scene: a named character speaks French, the learner must choose the correct French reply.
 - character_name: short name like "Marie" or "Le vendeur"
 - dialogue: the character's French sentence
-- english_context: one English sentence describing the situation
+- english_context: one sentence describing the situation (language depends on learner preference)
 - expected_response: the correct French reply
 - choices: exactly 3 options (1 correct, 2 wrong but plausible)
 - teacher_note: one short English sentence on the grammar (optional)
@@ -86,6 +94,7 @@ Keep every field short.`,
 Target phrases: ${lesson.target_phrases.join(", ")}
 Known verbs: ${inventory.verbs.join(", ") || "none"}
 Known nouns: ${inventory.nouns.slice(0, 8).join(", ") || "none"}
+${contextInstruction}
 Generate exactly 3 scenes as one continuous story with a consistent character.`,
       },
     ],

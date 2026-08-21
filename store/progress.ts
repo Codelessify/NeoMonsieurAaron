@@ -42,7 +42,9 @@ export const useProgressStore = create<ProgressStore>()(
             total_scenes: totalScenes,
             completed: true,
             completed_at: updated.last_played_at,
-          }, { onConflict: "user_id,lesson_id" });
+          }, { onConflict: "user_id,lesson_id" }).then(({ error }) => {
+            if (error) console.error("[mark-complete]", error);
+          });
         }
       },
 
