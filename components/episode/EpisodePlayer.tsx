@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, useEffect, useState } from "react";
 import { useEpisodePlayer } from "@/store/episodePlayer";
 import { useProgressStore } from "@/store/progress";
 import { useUserStore } from "@/store/user";
@@ -12,7 +13,6 @@ import { AnswerChoices } from "@/components/episode/AnswerChoices";
 import { TeacherNote } from "@/components/episode/TeacherNote";
 import { SceneIllustration } from "@/components/episode/SceneIllustration";
 import { MicButton } from "@/components/episode/MicButton";
-import { useMemo, useEffect } from "react";
 import type { AnswerChoice } from "@/types";
 
 interface EpisodePlayerProps {
@@ -36,6 +36,9 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
   const { markComplete } = useProgressStore();
   const { profile } = useUserStore();
 
+  // Mic-first mode: choices are hidden until user gets stuck
+  const [showChoices, setShowChoices] = useState(false);
+
   // Persist progress once when episode completes — not during render
   useEffect(() => {
     if (is_complete && episode) {
@@ -43,6 +46,11 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [is_complete]);
+
+  // When scene changes, reset the stuck state
+  useEffect(() => {
+    setShowChoices(false);
+  }, [current_scene_index]);
 
   // Shuffle choices once per scene render (stable via useMemo on scene_number)
   const scene = episode?.scenes[current_scene_index];
@@ -56,7 +64,7 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-500 text-sm">Génération de l&apos;épisode…</p>
+        <p className="text-gray-500 text-sm">Génération de l'épisode…</p>
       </div>
     );
   }
@@ -102,7 +110,7 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
             Retour au cours
           </Button>
           <Button variant="secondary" size="lg" fullWidth onClick={() => resetPlayer()}>
-            Rejouer l&apos;épisode
+            Rejouer l'épisode
           </Button>
         </div>
       </motion.div>
@@ -179,24 +187,36 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
         </motion.div>
       </AnimatePresence>
 
-      {/* Answer choices */}
-      <AnswerChoices
-        choices={shuffledChoices}
-        selectedIndex={selected_choice_index}
-        status={scene_status}
-        onSelect={selectChoice}
-      />
+      {/* Answer choices — only shown when answered OR when user gets stuck */}
+      {(isAnswered || showChoices) && (
+        <AnswerChoices
+          choices={shuffledChoices}
+          selectedIndex={selected_choice_index}
+          status={scene_status}
+          onSelect={selectChoice}
+        />
+      )}
 
-      {/* Mic input — shown while unanswered */}
+      {/* Mic input — always shown while unanswered (mic-first mode) */}
       {!isAnswered && (
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-100" />
+        <div className="flex flex-col items-center gap-4">
           <MicButton
             choices={shuffledChoices}
             onMatch={selectChoice}
+            onStuck={() => setShowChoices(true)}
             disabled={isAnswered}
+            maxRetries={2}
           />
-          <div className="flex-1 h-px bg-gray-100" />
+
+          {/* Fallback: manual "Show choices" button */}
+          {!showChoices && (
+            <button
+              onClick={() => setShowChoices(true)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              Montrer les options
+            </button>
+          )}
         </div>
       )}
 

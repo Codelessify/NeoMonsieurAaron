@@ -61,7 +61,8 @@ const EPISODE_SCHEMA = {
 export async function generateEpisode(
   lesson: Lesson,
   inventory: LearnerInventory,
-  contextLanguage: "english" | "french" | "mixed" = "english"
+  contextLanguage: "english" | "french" | "mixed" = "english",
+  userLocation?: string | null
 ): Promise<GroqEpisodeOutput> {
   const contextInstruction =
     contextLanguage === "french"
@@ -69,6 +70,10 @@ export async function generateEpisode(
       : contextLanguage === "mixed"
       ? "Write the english_context field in a mix of English and French (start in English, gradually introduce French)."
       : "Write the english_context field in English.";
+
+  const locationInstruction = userLocation
+    ? `\nThe learner is in ${userLocation}. Incorporate local landmarks and locations naturally into the situations (e.g. "tu vas au Tanke" if in Ilorin, "tu vas au marché Central" if in Yaoundé, "tu vas au quartier Latin" if in Paris).`
+    : "";
 
   const completion = await getGroq().chat.completions.create({
     model: MODEL,
@@ -95,6 +100,7 @@ Target phrases: ${lesson.target_phrases.join(", ")}
 Known verbs: ${inventory.verbs.join(", ") || "none"}
 Known nouns: ${inventory.nouns.slice(0, 8).join(", ") || "none"}
 ${contextInstruction}
+${locationInstruction}
 Generate exactly 3 scenes as one continuous story with a consistent character.`,
       },
     ],

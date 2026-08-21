@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { EpisodePlayerState, Episode, SceneStatus } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 
 interface EpisodePlayerStore extends EpisodePlayerState {
   loadEpisode: (episode: Episode) => void;
@@ -50,6 +51,24 @@ async function fetchImageForScene(prompt: string): Promise<string | null> {
   }
 }
 
+// Persist the full episode (with media URLs) to Supabase so it's cached
+async function persistEpisodeToSupabase(episode: Episode) {
+  try {
+    const supabase = createClient();
+    await supabase.from("episodes").upsert({
+      id: episode.id,
+      lesson_id: episode.lesson_id,
+      user_id: episode.user_id,
+      episode_title: episode.episode_title,
+      theme: episode.theme,
+      estimated_duration_minutes: episode.estimated_duration_minutes,
+      scenes: episode.scenes,
+    }, { onConflict: "id" });
+  } catch (err) {
+    console.error("[persist-episode]", err);
+  }
+}
+
 export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
   ...INITIAL_STATE,
 
@@ -59,6 +78,8 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
     // Fire TTS + image requests for all scenes in the background.
     // As each resolves, patch the url onto the scene in the store.
     episode.scenes.forEach((scene, i) => {
+      // Skip fetching if audio_url already exists (cached episode)
+      if (scene.audio_url) return;
       fetchAudioForScene(scene.dialogue ?? scene.speaker ?? "").then((audio_url) => {
         if (!audio_url) return;
         const current = get().episode;
@@ -66,10 +87,14 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
         const updatedScenes = current.scenes.map((s, j) =>
           j === i ? { ...s, audio_url } : s
         );
-        set({ episode: { ...current, scenes: updatedScenes } });
+        const updatedEpisode = { ...current, scenes: updatedScenes };
+        set({ episode: updatedEpisode, audio_playing: false });
+        persistEpisodeToSupabase(updatedEpisode);
       });
 
       if (scene.illustration_prompt) {
+        // Skip fetching if illustration_url already exists (cached episode)
+        if (scene.illustration_url) return;
         fetchImageForScene(scene.illustration_prompt).then((illustration_url) => {
           if (!illustration_url) return;
           const current = get().episode;
@@ -77,13 +102,15 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
           const updatedScenes = current.scenes.map((s, j) =>
             j === i ? { ...s, illustration_url } : s
           );
-          set({ episode: { ...current, scenes: updatedScenes } });
+          const updatedEpisode = { ...current, scenes: updatedScenes };
+          set({ episode: updatedEpisode });
+          persistEpisodeToSupabase(updatedEpisode);
         });
       }
     });
   },
 
-  selectChoice: (index) => {
+  selectChoice: (index: number) => {
     const { episode, current_scene_index, correct_count } = get();
     if (!episode) return;
     const scene = episode.scenes[current_scene_index];

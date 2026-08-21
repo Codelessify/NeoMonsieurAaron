@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         daily_goal_minutes: profileRow?.daily_goal_minutes ?? 10,
         context_language: profileRow?.context_language ?? "english",
         audio_autoplay: profileRow?.audio_autoplay ?? true,
+        location: profileRow?.location ?? null,
       };
       setProfile(profile);
       await loadFromSupabase(user.id);

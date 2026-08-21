@@ -108,6 +108,7 @@ export interface UserProfile {
   daily_goal_minutes: number;
   context_language: "english" | "french" | "mixed";
   audio_autoplay: boolean;
+  location?: string;
 }
 
 // ─── Episode Player State ────────────────────────────────────────────────────

@@ -11,6 +11,30 @@ export const STARTER_INVENTORY: LearnerInventory = {
   adjectives: [],
 };
 
+// ─── Location-based landmarks for context injection ──────────────────────────
+// Maps city names to recognizable local landmarks/areas for personalized prompts.
+export const LOCATION_LANDMARKS: Record<string, string[]> = {
+  ilorin: ["Tanke", "Challenge", "Unilorin", "Sabo"],
+  lagos: ["Victoria Island", "Ikoyi", "Lekki", "Surulere", "Badagry"],
+  abuja: ["Wuse", "Asokoro", "Maitama", "Gwarimpa"],
+  paris: ["le Marais", "Champs-Élysées", "Montmartre", "le Quartier Latin"],
+  marseille: ["le Vieux-Port", "Le Panier", "Prado", "Cours Julien"],
+  lyon: ["Vieux Lyon", "la Presqu'île", "Croix-Rousse", "Confluence"],
+  newYork: ["Times Square", "Brooklyn", "Central Park", "SoHo"],
+  london: ["Oxford Street", "Camden", "Soho", "Tower Bridge"],
+  yaounde: ["Boumba", "Bonanjo", "Obili", "Molykoe"],
+};
+
+export function getLandmarkForLocation(location: string): string | null {
+  const key = location.toLowerCase().trim();
+  for (const [city, landmarks] of Object.entries(LOCATION_LANDMARKS)) {
+    if (key.includes(city)) {
+      return landmarks[Math.floor(Math.random() * landmarks.length)];
+    }
+  }
+  return null;
+}
+
 // ─── Curriculum ───────────────────────────────────────────────────────────────
 // Each unit contains lessons. Each lesson has a fixed pedagogical objective.
 // The AI generates the actual episode content from this blueprint.

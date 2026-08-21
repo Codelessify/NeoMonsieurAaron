@@ -6,11 +6,13 @@ import { useUserStore } from "@/store/user";
 import { useProgressStore } from "@/store/progress";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { profile, clearProfile, updateContextLanguage, updateDailyGoal, updateAudioAutoplay } = useUserStore();
+  const { profile, clearProfile, updateContextLanguage, updateDailyGoal, updateAudioAutoplay, updateLocation } = useUserStore();
   const { clearProgress } = useProgressStore();
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -21,9 +23,33 @@ export default function SettingsPage() {
     router.refresh();
   }
 
+  async function handleDetectLocation() {
+    if (!navigator.geolocation) return;
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        // Use the location name in a simple lookup — reverse geocode via OpenStreetMap Nominatim
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, {
+          headers: { "User-Agent": "MonsieurAaron/1.0" },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            const city = data.address?.city || data.address?.town || data.address?.county || "Unknown";
+            updateLocation(city);
+            setIsDetectingLocation(false);
+          })
+          .catch(() => setIsDetectingLocation(false));
+      },
+      () => setIsDetectingLocation(false),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
   const contextLanguage = profile?.context_language ?? "english";
   const dailyGoal = profile?.daily_goal_minutes ?? 10;
   const audioAutoplay = profile?.audio_autoplay ?? true;
+  const userLocation = profile?.location ?? "";
 
   return (
     <div className="px-4 pt-6 flex flex-col gap-6">
@@ -54,8 +80,9 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Context language */}
+      {/* Settings */}
       <div className="flex flex-col gap-3">
+        {/* Context language */}
         <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Langue des situations</h3>
           <div className="flex gap-2">
@@ -121,6 +148,31 @@ export default function SettingsPage() {
               )}
             />
           </button>
+        </div>
+
+        {/* Location */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Localisation</h3>
+          <p className="text-xs text-gray-400 mb-2">
+            Les scènes utiliseront des lieux proches de chez vous (ex: Tanke, Challenge à Ilorin).
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Ville (ex: Ilorin, Paris, Yaoundé)"
+              value={userLocation}
+              onChange={(e) => updateLocation(e.target.value)}
+              className="flex-1 text-sm rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDetectLocation}
+              disabled={isDetectingLocation}
+            >
+              {isDetectingLocation ? "…" : "📍 Auto"}
+            </Button>
+          </div>
         </div>
 
         {/* About */}

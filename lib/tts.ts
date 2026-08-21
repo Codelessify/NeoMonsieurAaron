@@ -1,10 +1,9 @@
-// Expects a RunPod serverless endpoint running a French TTS model
-// (e.g. XTTS-v2, Coqui TTS, or Kokoro)
-// You can swap the endpoint URL to any compatible TTS API later.
+// Uses Minimax Speech 02 HD via RunPod
+// The endpoint ID points to a RunPod serverless endpoint running Minimax Speech 02 HD
 
 export interface TTSOptions {
   text: string;
-  voice?: string;          // voice ID, default "lucy"
+  voice?: string;          // voice ID, default "male" (or "female")
   format?: string;         // output format, default "wav"
 }
 
@@ -12,12 +11,6 @@ export interface TTSResult {
   audio_url: string;       // publicly accessible URL to the audio file
 }
 
-/**
- * Call the RunPod TTS endpoint.
- * The endpoint should accept { input: TTSOptions } and return { output: { audio_url: string } }
- * following the standard RunPod serverless /run + /status pattern,
- * OR return the audio URL synchronously if using a synchronous endpoint.
- */
 export async function generateTTS(options: TTSOptions): Promise<TTSResult> {
   const endpointId = process.env.RUNPOD_TTS_ENDPOINT_ID;
   const apiKey = process.env.RUNPOD_API_KEY;
@@ -35,12 +28,12 @@ export async function generateTTS(options: TTSOptions): Promise<TTSResult> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-        input: {
-          prompt: options.text,
-          voice: options.voice ?? "lucy",
-          format: options.format ?? "wav",
-        },
-      }),
+      input: {
+        prompt: options.text,
+        voice_id: options.voice ?? "male",
+        output_format: options.format ?? "wav",
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -59,7 +52,6 @@ export async function generateTTS(options: TTSOptions): Promise<TTSResult> {
     throw new Error(`RunPod TTS job failed: ${data.error ?? "unknown error"}`);
   }
 
-  // Support both { output: { audio_url } } and { output: "https://..." }
   let audioUrl: string | undefined;
 
   if (typeof data.output === "string") {

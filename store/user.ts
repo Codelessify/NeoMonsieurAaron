@@ -12,6 +12,7 @@ interface UserStore {
   updateContextLanguage: (lang: "english" | "french" | "mixed") => void;
   updateDailyGoal: (minutes: number) => void;
   updateAudioAutoplay: (enabled: boolean) => void;
+  updateLocation: (location: string) => void;
   clearProfile: () => void;
 }
 
@@ -40,6 +41,7 @@ async function persistProfileToSupabase(profile: UserProfile) {
       daily_goal_minutes: profile.daily_goal_minutes,
       context_language: profile.context_language,
       audio_autoplay: profile.audio_autoplay,
+      location: profile.location,
     }, { onConflict: "id" });
   } catch (err) {
     console.error("[persist-profile]", err);
@@ -105,6 +107,14 @@ export const useUserStore = create<UserStore>()(
         const { profile } = get();
         if (!profile) return;
         const updated = { ...profile, audio_autoplay };
+        set({ profile: updated });
+        persistProfileToSupabase(updated);
+      },
+
+      updateLocation: (location) => {
+        const { profile } = get();
+        if (!profile) return;
+        const updated = { ...profile, location };
         set({ profile: updated });
         persistProfileToSupabase(updated);
       },

@@ -18,6 +18,7 @@ create table public.user_profiles (
   daily_goal_minutes integer not null default 10,
   context_language text not null default 'english' check (context_language in ('english','french','mixed')),
   audio_autoplay boolean not null default true,
+  location     text,            -- user's city (e.g. "Ilorin") for location-based content
   created_at   timestamptz not null default now()
 );
 
@@ -71,6 +72,31 @@ create policy "Canonical episodes readable by all authenticated users"
 create policy "Users can insert own episodes"
   on public.episodes for insert
   with check (auth.uid() = user_id or user_id is null);
+
+-- ─── Scene Illustrations (cached image generation) ───────────────────
+-- Images are generated once and shared across all users for the same prompt.
+create table public.scene_illustrations (
+  id             uuid primary key default uuid_generate_v4(),
+  prompt_hash    text not null unique,  -- hash of the illustration prompt
+  prompt         text not null,         -- original prompt
+  image_url      text not null,         -- URL to the generated image
+  created_at     timestamptz not null default now(),
+  used_count     integer not null default 0
+);
+
+alter table public.scene_illustrations enable row level security;
+
+create policy "Authenticated users can read cached illustrations"
+  on public.scene_illustrations for select
+  using (auth.uid() is not null);
+
+create policy "Authenticated users can insert illustrations"
+  on public.scene_illustrations for insert
+  with check (auth.uid() is not null);
+
+create policy "Authenticated users can update illustrations"
+  on public.scene_illustrations for update
+  using (auth.uid() is not null);
 
 -- ─── Learner Progress ────────────────────────────────────────────────
 create table public.learner_progress (
