@@ -1,42 +1,20 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface AudioPlayerProps {
   src?: string | undefined;
-  text?: string;           // fallback: spoken via Web Speech API
   autoPlay?: boolean;
   onPlayingChange?: (playing: boolean) => void;
   className?: string;
   label?: string;
 }
 
-export function AudioPlayer({ src, text, autoPlay = false, onPlayingChange, className, label }: AudioPlayerProps) {
+export function AudioPlayer({ src, autoPlay = false, onPlayingChange, className, label }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const speakText = useCallback(() => {
-    if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "fr-FR";
-    utterance.rate = 0.9;
-    utteranceRef.current = utterance;
-    utterance.onstart = () => { setIsPlaying(true); setIsLoading(false); onPlayingChange?.(true); };
-    utterance.onend = () => { setIsPlaying(false); onPlayingChange?.(false); };
-    utterance.onerror = () => { setIsPlaying(false); setIsLoading(false); onPlayingChange?.(false); };
-    setIsLoading(true);
-    window.speechSynthesis.speak(utterance);
-  }, [text, onPlayingChange]);
-
-  // Autoplay via Web Speech if no src
-  useEffect(() => {
-    if (autoPlay && !src && text) speakText();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, autoPlay, src]);
 
   // Autoplay via audio element if src present
   useEffect(() => {
@@ -49,30 +27,17 @@ export function AudioPlayer({ src, text, autoPlay = false, onPlayingChange, clas
   }, [src, autoPlay]);
 
   function handleToggle() {
-    // Audio file playback
-    if (src && audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        setIsLoading(true);
-        audioRef.current.play().catch(() => setIsLoading(false));
-      }
-      return;
-    }
-    // Web Speech fallback
-    if (text) {
-      if (isPlaying) {
-        window.speechSynthesis?.cancel();
-        setIsPlaying(false);
-        onPlayingChange?.(false);
-      } else {
-        speakText();
-      }
+    if (!src || !audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      setIsLoading(true);
+      audioRef.current.play().catch(() => setIsLoading(false));
     }
   }
 
-  // No src and no text — nothing to play
-  if (!src && !text) {
+  // No src — nothing to play (RunPod TTS is the only audio source)
+  if (!src) {
     return (
       <button
         disabled
@@ -89,16 +54,14 @@ export function AudioPlayer({ src, text, autoPlay = false, onPlayingChange, clas
 
   return (
     <>
-      {src && (
-        <audio
-          ref={audioRef}
-          src={src}
-          onPlay={() => { setIsPlaying(true); setIsLoading(false); onPlayingChange?.(true); }}
-          onPause={() => { setIsPlaying(false); onPlayingChange?.(false); }}
-          onEnded={() => { setIsPlaying(false); onPlayingChange?.(false); }}
-          onCanPlayThrough={() => setIsLoading(false)}
-        />
-      )}
+      <audio
+        ref={audioRef}
+        src={src}
+        onPlay={() => { setIsPlaying(true); setIsLoading(false); onPlayingChange?.(true); }}
+        onPause={() => { setIsPlaying(false); onPlayingChange?.(false); }}
+        onEnded={() => { setIsPlaying(false); onPlayingChange?.(false); }}
+        onCanPlayThrough={() => setIsLoading(false)}
+      />
       <button
         onClick={handleToggle}
         className={cn(
