@@ -11,6 +11,17 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
     ],
   },
+  // Prevent browser caching of HTML pages so users always get the latest build
+  headers: async () => [
+    {
+      source: "/(.*)",
+      headers: [
+        { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { key: "Pragma", value: "no-cache" },
+        { key: "Expires", value: "0" },
+      ],
+    },
+  ],
   // Silence the Supabase/Zustand "use client" bundling warning
   serverExternalPackages: [],
 };

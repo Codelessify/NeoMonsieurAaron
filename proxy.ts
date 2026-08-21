@@ -10,6 +10,10 @@ export async function proxy(request: NextRequest) {
 
   // If env vars are missing, skip auth checks (avoids middleware crash in misconfigured envs)
   if (!supabaseUrl || !supabaseKey) {
+    // Prevent browser caching of HTML pages so users always get the latest build
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
     return response;
   }
 
@@ -47,6 +51,11 @@ export async function proxy(request: NextRequest) {
   if (user && isAuthPage) {
     return NextResponse.redirect(new URL("/learn", request.url));
   }
+
+  // Prevent browser caching of HTML pages so users always get the latest build
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
 
   return response;
 }
