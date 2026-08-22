@@ -5,14 +5,14 @@ import { useMemo, useEffect, useState } from "react";
 import { useEpisodePlayer } from "@/store/episodePlayer";
 import { useProgressStore } from "@/store/progress";
 import { useUserStore } from "@/store/user";
-import { shuffle, scoreToGrade } from "@/lib/utils";
-import { ProgressBar } from "@/components/ui/ProgressBar";
-import { Button } from "@/components/ui/Button";
 import { AudioPlayer } from "@/components/ui/AudioPlayer";
 import { AnswerChoices } from "@/components/episode/AnswerChoices";
 import { TeacherNote } from "@/components/episode/TeacherNote";
 import { SceneIllustration } from "@/components/episode/SceneIllustration";
 import { MicButton } from "@/components/episode/MicButton";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Button } from "@/components/ui/Button";
+import { scoreToGrade } from "@/lib/utils";
 import type { AnswerChoice } from "@/types";
 
 interface EpisodePlayerProps {
@@ -36,8 +36,11 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
   const { markComplete } = useProgressStore();
   const { profile } = useUserStore();
 
-  // Mic-first mode: choices are hidden until user gets stuck
+  // Mic-first mode: choices are hidden until user opts in
   const [showChoices, setShowChoices] = useState(false);
+
+  // Feedback after an unmatched mic attempt: what the user said + closest phrase
+  const [micFeedback, setMicFeedback] = useState<{ said: string; guess: AnswerChoice | null } | null>(null);
 
   // Persist progress once when episode completes — not during render
   useEffect(() => {
@@ -47,17 +50,17 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [is_complete]);
 
-  // When scene changes, reset the stuck state
+  // When scene changes, reset the stuck state and mic feedback
   useEffect(() => {
     setShowChoices(false);
+    setMicFeedback(null);
   }, [current_scene_index]);
 
-  // Shuffle choices once per scene render (stable via useMemo on scene_number)
+  // Use scene.choices directly — no shuffle to avoid index mismatch bugs
   const scene = episode?.scenes[current_scene_index];
-  const shuffledChoices: AnswerChoice[] = useMemo(() => {
+  const choices = useMemo(() => {
     if (!scene) return [];
-    return shuffle(scene.choices);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return scene.choices;
   }, [scene?.scene_number]);
 
   if (is_loading) {
@@ -190,7 +193,7 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
       {/* Answer choices — only shown when answered OR when user gets stuck */}
       {(isAnswered || showChoices) && (
         <AnswerChoices
-          choices={shuffledChoices}
+          choices={choices}
           selectedIndex={selected_choice_index}
           status={scene_status}
           onSelect={selectChoice}
@@ -201,12 +204,34 @@ export function EpisodePlayer({ onFinish }: EpisodePlayerProps) {
       {!isAnswered && (
         <div className="flex flex-col items-center gap-4">
           <MicButton
-            choices={shuffledChoices}
+            choices={choices}
             onMatch={selectChoice}
-            onStuck={() => setShowChoices(true)}
+            onNoMatch={(said, guess) => setMicFeedback({ said, guess })}
             disabled={isAnswered}
-            maxRetries={2}
           />
+
+          {/* Interpretation of unmatched speech: "you said X which means Y" */}
+          {micFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-md bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm space-y-1"
+            >
+              <p className="text-amber-800">
+                🗣️ Vous avez dit :{" "}
+                <span className="font-semibold">« {micFeedback.said} »</span>
+              </p>
+              {micFeedback.guess && (
+                <p className="text-amber-700">
+                  → Cela ressemble à :{" "}
+                  <span className="font-semibold">« {micFeedback.guess.text} »</span>
+                </p>
+              )}
+              <p className="text-xs text-amber-600">
+                Appuyez sur le micro pour réessayer.
+              </p>
+            </motion.div>
+          )}
 
           {/* Fallback: manual "Show choices" button */}
           {!showChoices && (

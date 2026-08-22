@@ -35,7 +35,9 @@ export function TeacherNote({ scene, status }: TeacherNoteProps) {
             isCorrect ? "text-emerald-700" : "text-amber-700"
           )}
         >
-          {isCorrect ? "✓ Bien joué !" : `✗ La bonne réponse : "${scene.expected_response}"`}
+          {isCorrect
+            ? "✓ Bien joué !"
+            : `→ Pas tout à fait — la bonne réponse : "${scene.expected_response}"`}
         </span>
 
         <button

@@ -1,10 +1,9 @@
 import { create } from "zustand";
-import type { EpisodePlayerState, Episode, SceneStatus } from "@/types";
-import { createClient } from "@/lib/supabase/client";
+import type { EpisodePlayerState, Episode, SceneStatus, AnswerChoice } from "@/types";
 
 interface EpisodePlayerStore extends EpisodePlayerState {
   loadEpisode: (episode: Episode) => void;
-  selectChoice: (index: number) => void;
+  selectChoice: (choice: AnswerChoice) => void;
   nextScene: () => void;
   resetPlayer: () => void;
   setAudioPlaying: (playing: boolean) => void;
@@ -54,6 +53,7 @@ async function fetchImageForScene(prompt: string): Promise<string | null> {
 // Persist the full episode (with media URLs) to Supabase so it's cached
 async function persistEpisodeToSupabase(episode: Episode) {
   try {
+    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     await supabase.from("episodes").upsert({
       id: episode.id,
@@ -110,14 +110,25 @@ export const useEpisodePlayer = create<EpisodePlayerStore>((set, get) => ({
     });
   },
 
-  selectChoice: (index: number) => {
-    const { episode, current_scene_index, correct_count } = get();
-    if (!episode) return;
+  // Accept the actual choice object — no index mismatch risk after shuffle.
+  // IDEMPOTENT: once a scene is answered, further calls are ignored.
+  // This guarantees correct_count can never be double-counted or corrupted
+  // by duplicate mic events / rapid clicks.
+  selectChoice: (choice: AnswerChoice) => {
+    const { episode, current_scene_index, correct_count, scene_status } = get();
+    if (!episode || scene_status !== "idle") return; // already answered — ignore
     const scene = episode.scenes[current_scene_index];
-    const choice = scene.choices[index];
-    const isCorrect = choice.is_correct;
+    if (!scene) return;
+
+    // Find the index of this choice in the original (unshuffled) choices array
+    // to set selected_choice_index for AnswerChoices display
+    const selectedIndex = scene.choices.findIndex(
+      (c) => c === choice || (c.text === choice.text && c.is_correct === choice.is_correct)
+    );
+
+    const isCorrect = !!choice.is_correct;
     set({
-      selected_choice_index: index,
+      selected_choice_index: selectedIndex >= 0 ? selectedIndex : null,
       scene_status: isCorrect ? "answered_correct" : "answered_wrong",
       correct_count: isCorrect ? correct_count + 1 : correct_count,
     });

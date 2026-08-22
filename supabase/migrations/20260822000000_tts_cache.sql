@@ -1,13 +1,14 @@
 -- ═══════════════════════════════════════════════════════════════════
--- MonsieurAaron — Supabase Schema Migration
--- Run this in Supabase SQL Editor to create all tables
+-- Migration: Full schema sync + TTS cache
+-- Creates any missing tables (learner_inventory, episodes,
+-- scene_illustrations, tts_cache) and (re)applies all RLS policies.
+-- Idempotent — safe to run multiple times.
 -- ═══════════════════════════════════════════════════════════════════
 
--- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
 -- ─── Users (extends Supabase Auth) ──────────────────────────────────
-create table public.user_profiles (
+create table if not exists public.user_profiles (
   id           uuid primary key references auth.users(id) on delete cascade,
   email        text not null,
   display_name text,
@@ -18,11 +19,15 @@ create table public.user_profiles (
   daily_goal_minutes integer not null default 10,
   context_language text not null default 'english' check (context_language in ('english','french','mixed')),
   audio_autoplay boolean not null default true,
-  location     text,            -- user's city (e.g. "Ilorin") for location-based content
+  location     text,
   created_at   timestamptz not null default now()
 );
 
 alter table public.user_profiles enable row level security;
+
+drop policy if exists "Users can view own profile" on public.user_profiles;
+drop policy if exists "Users can insert own profile" on public.user_profiles;
+drop policy if exists "Users can update own profile" on public.user_profiles;
 
 create policy "Users can view own profile"
   on public.user_profiles for select using (auth.uid() = id);
@@ -34,7 +39,7 @@ create policy "Users can update own profile"
   on public.user_profiles for update using (auth.uid() = id);
 
 -- ─── Learner Inventory (vocabulary tracking) ─────────────────────────
-create table public.learner_inventory (
+create table if not exists public.learner_inventory (
   id         uuid primary key default uuid_generate_v4(),
   user_id    uuid not null references auth.users(id) on delete cascade,
   word       text not null,
@@ -48,11 +53,13 @@ create table public.learner_inventory (
 
 alter table public.learner_inventory enable row level security;
 
+drop policy if exists "Users manage own inventory" on public.learner_inventory;
+
 create policy "Users manage own inventory"
   on public.learner_inventory for all using (auth.uid() = user_id);
 
 -- ─── Episodes (cached generated episodes) ────────────────────────────
-create table public.episodes (
+create table if not exists public.episodes (
   id           uuid primary key default uuid_generate_v4(),
   lesson_id    text not null,
   user_id      uuid references auth.users(id) on delete set null, -- null = canonical
@@ -65,41 +72,47 @@ create table public.episodes (
 
 alter table public.episodes enable row level security;
 
-create policy "Canonical episodes readable by all authenticated users"
-  on public.episodes for select
-  using (user_id is null or auth.uid() = user_id);
+drop policy if exists "Canonical episodes readable by all authenticated users" on public.episodes;
+drop policy if exists "Anyone can read episodes" on public.episodes;
+drop policy if exists "Users can insert own episodes" on public.episodes;
+drop policy if exists "Anyone can insert episodes" on public.episodes;
 
-create policy "Users can insert own episodes"
-  on public.episodes for insert
-  with check (auth.uid() = user_id or user_id is null);
+create policy "Anyone can read episodes"
+  on public.episodes for select using (true);
+
+create policy "Anyone can insert episodes"
+  on public.episodes for insert with check (true);
 
 -- ─── Scene Illustrations (cached image generation) ───────────────────
--- Images are generated once and shared across all users for the same prompt.
-create table public.scene_illustrations (
+create table if not exists public.scene_illustrations (
   id             uuid primary key default uuid_generate_v4(),
-  prompt_hash    text not null unique,  -- hash of the illustration prompt
-  prompt         text not null,         -- original prompt
-  image_url      text not null,         -- URL to the generated image
+  prompt_hash    text not null unique,
+  prompt         text not null,
+  image_url      text not null,
   created_at     timestamptz not null default now(),
   used_count     integer not null default 0
 );
 
 alter table public.scene_illustrations enable row level security;
 
-create policy "Authenticated users can read cached illustrations"
-  on public.scene_illustrations for select
-  using (auth.uid() is not null);
+drop policy if exists "Authenticated users can read cached illustrations" on public.scene_illustrations;
+drop policy if exists "Authenticated users can insert illustrations" on public.scene_illustrations;
+drop policy if exists "Authenticated users can update illustrations" on public.scene_illustrations;
+drop policy if exists "Anyone can read cached illustrations" on public.scene_illustrations;
+drop policy if exists "Anyone can insert illustrations" on public.scene_illustrations;
+drop policy if exists "Anyone can update illustrations" on public.scene_illustrations;
 
-create policy "Authenticated users can insert illustrations"
-  on public.scene_illustrations for insert
-  with check (auth.uid() is not null);
+create policy "Anyone can read cached illustrations"
+  on public.scene_illustrations for select using (true);
 
-create policy "Authenticated users can update illustrations"
-  on public.scene_illustrations for update
-  using (auth.uid() is not null);
+create policy "Anyone can insert illustrations"
+  on public.scene_illustrations for insert with check (true);
+
+create policy "Anyone can update illustrations"
+  on public.scene_illustrations for update using (true) with check (true);
 
 -- ─── Learner Progress ────────────────────────────────────────────────
-create table public.learner_progress (
+create table if not exists public.learner_progress (
   id              uuid primary key default uuid_generate_v4(),
   user_id         uuid not null references auth.users(id) on delete cascade,
   lesson_id       text not null,
@@ -115,12 +128,13 @@ create table public.learner_progress (
 
 alter table public.learner_progress enable row level security;
 
+drop policy if exists "Users manage own progress" on public.learner_progress;
+
 create policy "Users manage own progress"
   on public.learner_progress for all using (auth.uid() = user_id);
 
 -- ─── TTS Cache (shared audio generation cache) ───────────────────────
--- Audio is generated once per (voice, text) pair and reused app-wide.
-create table public.tts_cache (
+create table if not exists public.tts_cache (
   id          uuid primary key default uuid_generate_v4(),
   text_hash   text not null unique,  -- sha256(voice::text)
   source_text text not null,
@@ -132,8 +146,10 @@ create table public.tts_cache (
 
 alter table public.tts_cache enable row level security;
 
--- Shared media cache: readable/writable by any client (incl. guests)
--- since it contains no user-specific data.
+drop policy if exists "Anyone can read tts cache" on public.tts_cache;
+drop policy if exists "Anyone can insert tts cache" on public.tts_cache;
+drop policy if exists "Anyone can update tts cache" on public.tts_cache;
+
 create policy "Anyone can read tts cache"
   on public.tts_cache for select using (true);
 
@@ -142,23 +158,6 @@ create policy "Anyone can insert tts cache"
 
 create policy "Anyone can update tts cache"
   on public.tts_cache for update using (true) with check (true);
-
--- ─── Relax scene_illustrations policies for guest access ────────────
-drop policy if exists "Authenticated users can read cached illustrations"
-  on public.scene_illustrations;
-drop policy if exists "Authenticated users can insert illustrations"
-  on public.scene_illustrations;
-drop policy if exists "Authenticated users can update illustrations"
-  on public.scene_illustrations;
-
-create policy "Anyone can read cached illustrations"
-  on public.scene_illustrations for select using (true);
-
-create policy "Anyone can insert illustrations"
-  on public.scene_illustrations for insert with check (true);
-
-create policy "Anyone can update illustrations"
-  on public.scene_illustrations for update using (true) with check (true);
 
 -- ─── Trigger: auto-create user_profile on signup ─────────────────────
 create or replace function public.handle_new_user()
@@ -169,6 +168,8 @@ begin
   return new;
 end;
 $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
 
 create trigger on_auth_user_created
   after insert on auth.users
