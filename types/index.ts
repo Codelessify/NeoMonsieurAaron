@@ -198,7 +198,54 @@ export interface ChambreReportResponse {
   report: ChambreReport;
 }
 
+// ─── Ville (map simulations) ─────────────────────────────────────────────────
+export type ScenarioId =
+  | "station"
+  | "banque"
+  | "cafe"
+  | "boulangerie"
+  | "supermarche"
+  | "pharmacie"
+  | "marche"
+  | "restaurant"
+  | "gare";
+
+export interface MapPlace {
+  scenario: ScenarioId;
+  name: string;          // real place name (from OpenStreetMap) or French fallback
+  lat: number;
+  lon: number;
+  isReal: boolean;       // true = found via OpenStreetMap, false = synthetic fallback
+}
+
+export interface SimStartRequest {
+  scenario: ScenarioId;
+  place_name?: string;
+  inventory: LearnerInventory;
+  user_id?: string;
+}
+
+export interface SimStartResponse {
+  opening: string;
+}
+
+export interface SimReplyRequest {
+  scenario: ScenarioId;
+  messages: ChambreMessage[];
+  inventory: LearnerInventory;
+  user_id?: string;
+}
+
+export interface SimReplyResponse {
+  reply: string;
+}
+
+export interface ReverseGeocodeResponse {
+  display_name: string;
+}
+
 // ─── Groq Structured Output ──────────────────────────────────────────────────
+
 export interface GroqEpisodeOutput {
   episode_title: string;
   theme: string;

@@ -16,22 +16,72 @@ function getGroq(): Groq {
 
 const MODEL = "openai/gpt-oss-20b";
 
+// gpt-oss models "think" before answering: the chain-of-thought shares the
+// max_tokens budget with the final message. When the budget is small the model
+// can spend everything on reasoning and return empty `content`. We therefore
+// request low reasoning effort, use a generous token budget, retry once, and
+// fall back to a canned line so the UI never breaks.
+const CHAT_MAX_TOKENS = 1024;
+
+type ChatMessages = Array<{
+  role: "system" | "user" | "assistant";
+  content: string;
+}>;
+
+type ChatJsonSchema = NonNullable<
+  Parameters<Groq["chat"]["completions"]["create"]>[0]
+>["response_format"];
+
+export async function chatWithRetry(
+  messages: ChatMessages,
+  temperature: number,
+  responseFormat?: ChatJsonSchema
+): Promise<string | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const completion = await getGroq().chat.completions.create({
+        model: MODEL,
+        messages,
+        temperature,
+        max_tokens: CHAT_MAX_TOKENS,
+        reasoning_effort: "low",
+        ...(responseFormat ? { response_format: responseFormat } : {}),
+      });
+      const raw = completion.choices[0]?.message?.content?.trim();
+      if (raw) return raw;
+      console.error(
+        `[groq] attempt ${attempt + 1}: empty content (reasoning consumed the budget?)`
+      );
+    } catch (err) {
+      console.error(`[groq] attempt ${attempt + 1} failed`, err);
+    }
+  }
+  return null;
+}
+
 type ContextLanguage = "english" | "french" | "mixed";
 
 // ─── Shared vocabulary constraint ────────────────────────────────────────────
 // The core rule of Chambre: the AI speaks ONLY with words the learner knows.
-function vocabularyConstraint(inventory: LearnerInventory): string {
+// (Exported for reuse by the Ville simulations in lib/simulation.ts)
+export function vocabularyConstraint(
+  inventory: LearnerInventory,
+  extraVocabulary?: string[]
+): string {
   const words = getKnownWordList(inventory);
   const patterns = [
     ...inventory.sentence_patterns,
     ...inventory.question_patterns,
   ];
+  const allWords = extraVocabulary?.length
+    ? [...words, ...extraVocabulary]
+    : words;
 
   return `ABSOLUTE RULE — VOCABULARY LIMIT:
 You must write French using ONLY the words from this list (plus tiny function words like "je", "tu", "il", "elle", "nous", "vous", "est", "sont", "à", "en", "que", "qui", "pas", "c'est" needed for grammar):
-${words.join(", ")}
+${allWords.join(", ")}
 ${patterns.length ? `\nFull expressions the learner knows: ${patterns.join(" | ")}` : ""}
-Do NOT introduce any new vocabulary, even simple words. If you cannot say something with these words, rephrase it using only them. Keep every message SHORT (max 1-2 sentences) so the learner can understand and reply.`;
+Do NOT introduce any new vocabulary beyond this list, even simple words. If you cannot say something with these words, rephrase it using only them. Keep every message SHORT (max 1-2 sentences) so the learner can understand and reply.`;
 }
 
 function contextInstruction(contextLanguage: ContextLanguage): string {
@@ -43,6 +93,13 @@ function contextInstruction(contextLanguage: ContextLanguage): string {
 }
 
 // ─── Opening line ────────────────────────────────────────────────────────────
+const FALLBACK_OPENINGS = [
+  "Bonjour ! Comment ça va aujourd'hui ?",
+  "Salut ! Qu'est-ce que tu fais aujourd'hui ?",
+  "Bonjour ! Tu veux parler de quoi ?",
+  "Salut ! Comment tu es ce matin ?",
+];
+
 export async function generateChambreOpening(
   inventory: LearnerInventory,
   contextLanguage: ContextLanguage = "english",
@@ -52,36 +109,44 @@ export async function generateChambreOpening(
     ? `\nThe learner lives in or near ${userLocation}. If natural, reference a familiar everyday place.`
     : "";
 
-  const completion = await getGroq().chat.completions.create({
-    model: MODEL,
-    messages: [
+  const raw = await chatWithRetry(
+    [
       {
         role: "system",
         content: `You are Monsieur Aaron, a warm and playful French conversation partner for a beginner learner. You are starting a free, casual conversation (la Chambre).
 
 ${vocabularyConstraint(inventory)}
 ${locationLine}
+${contextInstruction(contextLanguage)}
 Write exactly ONE opening message in French: a short sentence, question, or friendly comment that naturally invites the learner to respond. Output ONLY the French message, nothing else. No corrections, no English, no explanations.`,
       },
     ],
-    temperature: 0.9,
-    max_tokens: 120,
-  });
+    0.9
+  );
 
-  const raw = completion.choices[0]?.message?.content?.trim();
-  if (!raw) throw new Error("Groq returned empty opening");
+  if (!raw) {
+    // Never break the UX: fall back to a safe line built from starter vocab.
+    console.error("[chambre] Groq returned empty opening — using fallback");
+    return FALLBACK_OPENINGS[Math.floor(Math.random() * FALLBACK_OPENINGS.length)];
+  }
   return stripQuotes(raw);
 }
 
 // ─── Conversation reply ──────────────────────────────────────────────────────
+const FALLBACK_REPLIES = [
+  "D'accord ! Et après, qu'est-ce que tu fais ?",
+  "C'est bien ! Tu aimes ça ?",
+  "Ah bon ? Raconte-moi encore !",
+  "Très bien ! Et toi, tu es content ?",
+];
+
 export async function generateChambreReply(
   messages: ChambreMessage[],
   inventory: LearnerInventory,
   contextLanguage: ContextLanguage = "english"
 ): Promise<string> {
-  const completion = await getGroq().chat.completions.create({
-    model: MODEL,
-    messages: [
+  const raw = await chatWithRetry(
+    [
       {
         role: "system",
         content: `You are Monsieur Aaron, a warm and playful French conversation partner for a beginner learner, chatting freely (la Chambre).
@@ -100,12 +165,13 @@ CRITICAL BEHAVIOUR:
         content: m.text,
       })),
     ],
-    temperature: 0.8,
-    max_tokens: 150,
-  });
+    0.8
+  );
 
-  const raw = completion.choices[0]?.message?.content?.trim();
-  if (!raw) throw new Error("Groq returned empty reply");
+  if (!raw) {
+    console.error("[chambre] Groq returned empty reply — using fallback");
+    return FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
+  }
   return stripQuotes(raw);
 }
 
@@ -158,9 +224,8 @@ export async function generateChambreReport(
 
   const knownWords = getKnownWordList(inventory);
 
-  const completion = await getGroq().chat.completions.create({
-    model: MODEL,
-    messages: [
+  const raw = await chatWithRetry(
+    [
       {
         role: "system",
         content: `You are a kind French teacher reviewing a beginner learner's free conversation (la Chambre) AFTER it ended. Now is the time to give corrections.
@@ -181,19 +246,17 @@ Rules:
           .join("\n")}`,
       },
     ],
-    response_format: {
+    0.4,
+    {
       type: "json_schema",
       json_schema: {
         name: "chambre_report",
         strict: false,
         schema: REPORT_SCHEMA,
       },
-    },
-    temperature: 0.4,
-    max_tokens: 1200,
-  });
+    }
+  );
 
-  const raw = completion.choices[0]?.message?.content;
   if (!raw) throw new Error("Groq returned empty report");
 
   const parsed = JSON.parse(raw) as Partial<ChambreReport>;
