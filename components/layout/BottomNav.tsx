@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/learn",    label: "Cours",    emoji: "📚" },
+  { href: "/chambre",  label: "Chambre",  emoji: "🚪" },
   { href: "/vocab",   label: "Vocab",    emoji: "💬" },
   { href: "/progress", label: "Progrès",  emoji: "📈" },
   { href: "/settings", label: "Réglages", emoji: "⚙️" },

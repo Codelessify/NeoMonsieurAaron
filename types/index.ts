@@ -152,6 +152,52 @@ export interface GenerateTTSResponse {
   audio_url: string;
 }
 
+// ─── Chambre (free conversation room) ────────────────────────────────────────
+export interface ChambreMessage {
+  role: "ai" | "user";
+  text: string;
+}
+
+export interface ChambreCorrection {
+  original: string;      // what the learner wrote
+  corrected: string;     // corrected French version
+  explanation: string;   // short explanation in learner's context language
+}
+
+export interface ChambreReport {
+  corrections: ChambreCorrection[];
+  overall_feedback: string;   // encouraging summary in context language
+  vocabulary_used: string[];  // known words the learner successfully used
+}
+
+export interface ChambreStartRequest {
+  user_id?: string;
+  inventory: LearnerInventory;
+}
+
+export interface ChambreStartResponse {
+  opening: string;
+}
+
+export interface ChambreReplyRequest {
+  messages: ChambreMessage[];
+  inventory: LearnerInventory;
+}
+
+export interface ChambreReplyResponse {
+  reply: string;
+}
+
+export interface ChambreReportRequest {
+  messages: ChambreMessage[];
+  inventory: LearnerInventory;
+  user_id?: string;
+}
+
+export interface ChambreReportResponse {
+  report: ChambreReport;
+}
+
 // ─── Groq Structured Output ──────────────────────────────────────────────────
 export interface GroqEpisodeOutput {
   episode_title: string;

@@ -211,3 +211,56 @@ export function getKnownInventoryForLesson(lessonId: string): LearnerInventory {
 
   return inventory;
 }
+
+// ─── Chambre: inventory from completed lessons ───────────────────────────────
+// Builds the learner's vocabulary from the lessons they have completed
+// (plus the starter inventory). Used by the Chambre free-conversation mode.
+export function getInventoryFromLessons(completedLessonIds: string[]): LearnerInventory {
+  const inventory: LearnerInventory = {
+    verbs: [...STARTER_INVENTORY.verbs],
+    nouns: [...STARTER_INVENTORY.nouns],
+    sentence_patterns: [],
+    question_patterns: [],
+    time_expressions: [],
+    connectors: [],
+    adjectives: [],
+  };
+
+  const completed = new Set(completedLessonIds);
+
+  for (const unit of CURRICULUM) {
+    for (const lesson of unit.lessons) {
+      if (!completed.has(lesson.id)) continue;
+      for (const phrase of lesson.target_phrases) {
+        const words = phrase
+          .toLowerCase()
+          .replace(/[.,!?']/g, " ")
+          .split(/\s+/)
+          .filter(Boolean);
+        inventory.sentence_patterns.push(phrase);
+        for (const w of words) {
+          if (["et", "mais", "ou", "donc", "avec", "pour", "par", "de", "du", "la", "le", "les", "un", "une"].includes(w)) {
+            if (!inventory.connectors.includes(w)) inventory.connectors.push(w);
+          } else if (["aujourd'hui", "demain", "hier", "ce", "matin", "soir", "maintenant"].includes(w)) {
+            if (!inventory.time_expressions.includes(w)) inventory.time_expressions.push(w);
+          } else if (w.length > 3) {
+            if (!inventory.nouns.includes(w)) inventory.nouns.push(w);
+          }
+        }
+      }
+    }
+  }
+
+  return inventory;
+}
+
+// Flat list of every known word — used to constrain the AI in Chambre mode.
+export function getKnownWordList(inventory: LearnerInventory): string[] {
+  return [
+    ...inventory.verbs,
+    ...inventory.nouns,
+    ...inventory.connectors,
+    ...inventory.adjectives,
+    ...inventory.time_expressions,
+  ];
+}
