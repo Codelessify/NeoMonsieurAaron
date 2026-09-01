@@ -62,7 +62,24 @@ export async function chatWithRetry(
 type ContextLanguage = "english" | "french" | "mixed";
 
 // ─── Shared vocabulary constraint ────────────────────────────────────────────
-// The core rule of Chambre: the AI speaks ONLY with words the learner knows.
+// Core rule: the AI speaks with the learner's own words PLUS this core A1
+// survival list. Without it, a beginner's inventory (~6 words) leaves the
+// model nothing to say, so every reply loops on "Bonjour, ça va ?".
+const CORE_A1_WORDS: string[] = [
+  "salut", "bonsoir", "merci", "beaucoup", "si", "très", "bien", "super", "génial", "cool",
+  "sympa", "ça", "va", "comment", "aujourd'hui", "demain", "matin", "soir", "semaine", "weekend",
+  "vacances", "famille", "mère", "père", "frère", "sœur", "ami", "amie", "copain", "copine",
+  "chien", "chat", "manger", "boire", "pizza", "café", "thé", "eau", "pain", "fromage",
+  "chocolat", "glace", "restaurant", "cuisine", "aimer", "adorer", "détester", "préférer", "vouloir", "pouvoir",
+  "devoir", "aller", "venir", "faire", "dire", "parler", "regarder", "écouter", "jouer", "travailler",
+  "étudier", "apprendre", "lire", "dormir", "sport", "football", "musique", "film", "livre", "école",
+  "maison", "ville", "plage", "montagne", "content", "heureux", "heureuse", "triste", "fatigué", "faim",
+  "soif", "chaud", "froid", "facile", "difficile", "nouveau", "petit", "grand", "pourquoi", "quoi",
+  "qui", "où", "quand", "combien", "quel", "quelle", "peu", "trop", "presque", "maintenant",
+  "après", "avant", "souvent", "toujours", "jamais", "parfois", "temps", "beau", "pleut", "neige",
+  "argent", "travail", "moi", "aussi", "avec", "sans", "pour", "parce", "mais", "donc",
+];
+
 // (Exported for reuse by the Ville simulations in lib/simulation.ts)
 export function vocabularyConstraint(
   inventory: LearnerInventory,
@@ -73,15 +90,15 @@ export function vocabularyConstraint(
     ...inventory.sentence_patterns,
     ...inventory.question_patterns,
   ];
-  const allWords = extraVocabulary?.length
-    ? [...words, ...extraVocabulary]
-    : words;
+  const allWords = [
+    ...new Set([...words, ...CORE_A1_WORDS, ...(extraVocabulary ?? [])]),
+  ];
 
   return `ABSOLUTE RULE — VOCABULARY LIMIT:
-You must write French using ONLY the words from this list (plus tiny function words like "je", "tu", "il", "elle", "nous", "vous", "est", "sont", "à", "en", "que", "qui", "pas", "c'est" needed for grammar):
+You must write French using ONLY the words from this list (plus tiny function words like "je", "tu", "il", "elle", "nous", "vous", "est", "sont", "à", "en", "pas", "c'est" needed for grammar). Words the learner learned personally come first — prefer them.
 ${allWords.join(", ")}
 ${patterns.length ? `\nFull expressions the learner knows: ${patterns.join(" | ")}` : ""}
-Do NOT introduce any new vocabulary beyond this list, even simple words. If you cannot say something with these words, rephrase it using only them. Keep every message SHORT (max 1-2 sentences) so the learner can understand and reply.`;
+If you cannot say something with these words, rephrase it using only them. Keep every message SHORT (max 1-2 sentences) so the learner can understand and reply.`;
 }
 
 function contextInstruction(contextLanguage: ContextLanguage): string {
@@ -97,7 +114,23 @@ const FALLBACK_OPENINGS = [
   "Bonjour ! Comment ça va aujourd'hui ?",
   "Salut ! Qu'est-ce que tu fais aujourd'hui ?",
   "Bonjour ! Tu veux parler de quoi ?",
-  "Salut ! Comment tu es ce matin ?",
+  "Salut ! Tu aimes la musique ?",
+  "Bonjour ! Tu as faim ? Moi, j'adore la pizza !",
+];
+
+// A random theme per session keeps every opening fresh instead of the same
+// "Bonjour, comment ça va ?" every time.
+const OPENING_THEMES = [
+  "la nourriture (tu préfères la pizza ou les pâtes ?)",
+  "les animaux (tu as un chien ou un chat ?)",
+  "la musique (tu écoutes quoi en ce moment ?)",
+  "le week-end (tu fais quoi pour t'amuser ?)",
+  "les vacances (la plage ou la montagne ?)",
+  "le sport (tu joues au football ou à un autre sport ?)",
+  "les films (tu regardes quoi ?)",
+  "la famille (tu as des frères et sœurs ?)",
+  "la météo (il fait beau chez toi ?)",
+  "les amis (tu vois tes copains ce week-end ?)",
 ];
 
 export async function generateChambreOpening(
@@ -105,8 +138,9 @@ export async function generateChambreOpening(
   contextLanguage: ContextLanguage = "english",
   userLocation?: string | null
 ): Promise<string> {
+  const theme = OPENING_THEMES[Math.floor(Math.random() * OPENING_THEMES.length)];
   const locationLine = userLocation
-    ? `\nThe learner lives in or near ${userLocation}. If natural, reference a familiar everyday place.`
+    ? `\nThe learner lives in or near ${userLocation}. If natural, reference a familiar everyday place there.`
     : "";
 
   const raw = await chatWithRetry(
@@ -118,10 +152,12 @@ export async function generateChambreOpening(
 ${vocabularyConstraint(inventory)}
 ${locationLine}
 ${contextInstruction(contextLanguage)}
-Write exactly ONE opening message in French: a short sentence, question, or friendly comment that naturally invites the learner to respond. Output ONLY the French message, nothing else. No corrections, no English, no explanations.`,
+
+Today, open with the theme: ${theme}. Make it specific and playful — a tiny personal opinion, a fun detail, or a "tu préfères X ou Y ?" style question about it. Vary your greeting (salut, bonjour, hey...) and do NOT open with a generic "comment ça va ?".
+Write exactly ONE opening message in French. Output ONLY the French message, nothing else. No corrections, no English, no explanations.`,
       },
     ],
-    0.9
+    1.0
   );
 
   if (!raw) {
@@ -134,10 +170,14 @@ Write exactly ONE opening message in French: a short sentence, question, or frie
 
 // ─── Conversation reply ──────────────────────────────────────────────────────
 const FALLBACK_REPLIES = [
-  "D'accord ! Et après, qu'est-ce que tu fais ?",
-  "C'est bien ! Tu aimes ça ?",
-  "Ah bon ? Raconte-moi encore !",
-  "Très bien ! Et toi, tu es content ?",
+  "Ah super ! Raconte-moi encore !",
+  "C'est vrai ? Moi, j'adore ça ! Et toi, tu fais ça souvent ?",
+  "Ah bon ? Pourquoi tu dis ça ?",
+  "Génial ! Et après, qu'est-ce que tu fais ?",
+  "Moi aussi ! On est pareil, toi et moi !",
+  "Pas mal ! Tu es content aujourd'hui ?",
+  "Ah, j'aime beaucoup ! Tu veux parler d'autre chose ?",
+  "Vraiment ? C'est fou ça !",
 ];
 
 export async function generateChambreReply(
@@ -154,8 +194,11 @@ export async function generateChambreReply(
 ${vocabularyConstraint(inventory)}
 ${contextInstruction(contextLanguage)}
 
-CRITICAL BEHAVIOUR:
-- Continue the conversation naturally based on what the learner says.
+CRITICAL BEHAVIOUR — FOLLOW THE LEARNER'S LEAD:
+- The learner drives the conversation. React FIRST and specifically to what they just said: pick up their exact topic, words or feeling and build on it. Do NOT redirect to a topic of your own.
+- Show real personality: react with genuine emotion (surprise, joy, curiosity, playful disagreement) and share tiny opinions of your own ("moi, j'adore ça !" / "ah non, pas moi !").
+- End with AT MOST one short question, and only if it moves THEIR topic forward. Never ask a question if your reaction already invites them to keep talking.
+- ANTI-REPETITION: read the transcript carefully. Never repeat a question you already asked, never reuse a sentence you already wrote, and vary your openers (never start two messages with the same word like "D'accord", "C'est bien" or "Ah bon").
 - NEVER correct the learner's mistakes, never point out errors, never explain grammar. If the learner makes a mistake, just understand the intent and keep the conversation flowing.
 - If the learner writes something you can't fully understand, respond to the part you understood, or gently ask a simple question using only known words.
 - Reply with ONLY your short French message (1-2 sentences). No English, no explanations, no corrections.`,
@@ -165,7 +208,7 @@ CRITICAL BEHAVIOUR:
         content: m.text,
       })),
     ],
-    0.8
+    1.0
   );
 
   if (!raw) {

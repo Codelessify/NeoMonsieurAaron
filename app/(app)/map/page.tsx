@@ -91,15 +91,16 @@ async function fetchRealPlaces(lat: number, lon: number): Promise<MapPlace[]> {
   return places;
 }
 
-// ─── Synthetic fallback places spread around the centre ──────────────────────
+// ─── Synthetic fallback places spread CLOSE to the centre (must stay on
+// ─── screen at the default zoom — ~1km offsets made markers invisible) ───────
 function fallbackPlaces(lat: number, lon: number): MapPlace[] {
   return SCENARIO_LIST.map((s, i) => {
     const angle = (i / SCENARIO_LIST.length) * Math.PI * 2;
     return {
       scenario: s.id,
       name: s.fallbackNames[i % s.fallbackNames.length],
-      lat: lat + Math.sin(angle) * 0.009,
-      lon: lon + Math.cos(angle) * 0.014,
+      lat: lat + Math.sin(angle) * 0.0022,
+      lon: lon + Math.cos(angle) * 0.003,
       isReal: false,
     };
   });
@@ -119,6 +120,7 @@ export default function MapPage() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -185,9 +187,13 @@ export default function MapPage() {
       }).addTo(map);
       markerLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      // The container may have been laid out after init — refresh its size.
+      setTimeout(() => map.invalidateSize(), 0);
+      setMapReady(true);
     })();
     return () => {
       cancelled = true;
+      setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -195,19 +201,27 @@ export default function MapPage() {
 
   // ─── Re-centre the map and draw markers when places change ─────────────────
   useEffect(() => {
-    if (!center || !mapRef.current || !markerLayerRef.current) return;
+    if (!center || !mapReady || !mapRef.current || !markerLayerRef.current) return;
     (async () => {
       const L = (await import("leaflet")).default;
       const map = mapRef.current!;
       const layer = markerLayerRef.current!;
-      map.setView([center.lat, center.lon], 15);
+      if (places.length) {
+        // Fit ALL markers into view so none can ever be off-screen.
+        const bounds = L.latLngBounds(
+          places.map((p) => [p.lat, p.lon] as [number, number])
+        );
+        map.fitBounds(bounds, { padding: [52, 52], maxZoom: 16 });
+      } else {
+        map.setView([center.lat, center.lon], 15);
+      }
       layer.clearLayers();
 
       for (const place of places) {
         const scenario = SCENARIOS[place.scenario];
         const icon = L.divIcon({
           className: "",
-          html: `<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;font-size:20px;background:#ffffff;border:2px solid #2563eb;border-radius:12px 12px 12px 2px;box-shadow:0 2px 6px rgba(0,0,0,.25);">${scenario.emoji}</div>`,
+          html: `<div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;font-size:20px;background:#ffffff;border:2px solid #2563eb;border-radius:12px 12px 12px 2px;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;">${scenario.emoji}</div>`,
           iconSize: [38, 38],
           iconAnchor: [19, 36],
           popupAnchor: [0, -32],
@@ -220,7 +234,15 @@ export default function MapPage() {
         marker.on("click", () => setSelected(place));
       }
     })();
-  }, [places, center]);
+  }, [places, center, mapReady]);
+
+  // Returning from a session: the container was hidden — refresh the map size.
+  useEffect(() => {
+    if (phase === "map" && mapReady) {
+      const t = setTimeout(() => mapRef.current?.invalidateSize(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [phase, mapReady]);
 
   // ─── Enter a place: start the simulation ────────────────────────────────────
   const handleEnter = useCallback(
@@ -432,8 +454,39 @@ export default function MapPage() {
 
       {/* Loading overlay */}
       {isLocating && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 bg-white/90 backdrop-blur rounded-full px-4 py-2 shadow-md text-xs text-gray-600">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 bg-white/90 backdrop-blur rounded-full px-4 py-2 shadow-md text-xs text-gray-600 pointer-events-none">
           Recherche des lieux autour de vous…
+        </div>
+      )}
+
+      {/* Quick-entry chips — always-available way to start a scenario */}
+      {!selected && !isLocating && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-3 pb-3 pointer-events-none">
+          <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200 shadow-lg p-2.5 pointer-events-auto">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1.5">
+              Ou va directement chez…
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
+              {SCENARIO_LIST.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() =>
+                    setSelected({
+                      scenario: s.id,
+                      name: s.fallbackNames[0],
+                      lat: center?.lat ?? PARIS.lat,
+                      lon: center?.lon ?? PARIS.lon,
+                      isReal: false,
+                    })
+                  }
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-100 text-xs font-medium text-blue-700 transition-colors"
+                >
+                  <span>{s.emoji}</span>
+                  <span>{s.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

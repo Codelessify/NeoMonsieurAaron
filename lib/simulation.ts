@@ -41,7 +41,9 @@ ${contextInstruction(contextLanguage)}
 
 CRITICAL BEHAVIOUR:
 - You are ${scenario.npcName} at the ${scenario.label}, NOT a French teacher. Never break character, never correct the learner, never explain grammar, never write English.
-- Gently guide the learner towards the goal of the interaction, one small step at a time.
+- The learner drives the scene: react FIRST and specifically to what they just said or asked, then gently guide one small step towards the goal.
+- VARY YOUR LINES: never repeat a sentence or question you already used in this conversation, and vary your openers (never start two messages with the same word).
+- React with real personality (warmth, humour, mild impatience if they take long) so the scene feels alive.
 - If the learner writes in English or in broken French, understand the intent and respond in simple French using only the allowed words.
 - If the learner is stuck, ask a simple question from the allowed vocabulary to help them.
 - Reply with ONLY your short French message (1-2 sentences), as spoken dialogue.`;
@@ -126,7 +128,7 @@ export async function generateSimulationReply(
         content: m.text,
       })),
     ],
-    0.8
+    1.0
   );
 
   if (!raw) {
