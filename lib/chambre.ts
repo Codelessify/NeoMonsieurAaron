@@ -87,8 +87,8 @@ export function vocabularyConstraint(
 ): string {
   const words = getKnownWordList(inventory);
   const patterns = [
-    ...inventory.sentence_patterns,
-    ...inventory.question_patterns,
+    ...(inventory.sentence_patterns ?? []),
+    ...(inventory.question_patterns ?? []),
   ];
   const allWords = [
     ...new Set([...words, ...CORE_A1_WORDS, ...(extraVocabulary ?? [])]),

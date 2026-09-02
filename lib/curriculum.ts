@@ -257,10 +257,10 @@ export function getInventoryFromLessons(completedLessonIds: string[]): LearnerIn
 // Flat list of every known word — used to constrain the AI in Chambre mode.
 export function getKnownWordList(inventory: LearnerInventory): string[] {
   return [
-    ...inventory.verbs,
-    ...inventory.nouns,
-    ...inventory.connectors,
-    ...inventory.adjectives,
-    ...inventory.time_expressions,
+    ...(inventory.verbs ?? []),
+    ...(inventory.nouns ?? []),
+    ...(inventory.connectors ?? []),
+    ...(inventory.adjectives ?? []),
+    ...(inventory.time_expressions ?? []),
   ];
 }
