@@ -9,7 +9,7 @@ function getGroq(): Groq {
   return _groq;
 }
 
-const MODEL = "openai/gpt-oss-20b";
+const MODEL = "openai/gpt-oss-120b";
 
 // Core fields only in required — optional enrichment fields left out so
 // the model can omit them if it runs close to the token limit.

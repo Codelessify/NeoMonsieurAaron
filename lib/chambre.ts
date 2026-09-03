@@ -14,13 +14,13 @@ function getGroq(): Groq {
   return _groq;
 }
 
-const MODEL = "openai/gpt-oss-20b";
+const MODEL = "openai/gpt-oss-120b";
 
-// gpt-oss models "think" before answering: the chain-of-thought shares the
-// max_tokens budget with the final message. When the budget is small the model
-// can spend everything on reasoning and return empty `content`. We therefore
-// request low reasoning effort, use a generous token budget, retry once, and
-// fall back to a canned line so the UI never breaks.
+// The 120B model produces noticeably better French than gpt-oss-20b ("Qu'est-ce
+// que vous voulez ?" instead of "Qu'est-tu venu ?"). gpt-oss models "think"
+// before answering: chain-of-thought shares the max_tokens budget with the
+// final message, so we request low reasoning effort, use a generous token
+// budget, retry once, and fall back to a canned line so the UI never breaks.
 const CHAT_MAX_TOKENS = 1024;
 
 type ChatMessages = Array<{
@@ -44,7 +44,8 @@ export async function chatWithRetry(
         messages,
         temperature,
         max_tokens: CHAT_MAX_TOKENS,
-        reasoning_effort: "low",
+        // gpt-oss models accept (and need) reasoning_effort; other models 400 on it
+        ...(MODEL.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" as const } : {}),
         ...(responseFormat ? { response_format: responseFormat } : {}),
       });
       const raw = completion.choices[0]?.message?.content?.trim();
@@ -95,9 +96,10 @@ export function vocabularyConstraint(
   ];
 
   return `ABSOLUTE RULE — VOCABULARY LIMIT:
-You must write French using ONLY the words from this list (plus tiny function words like "je", "tu", "il", "elle", "nous", "vous", "est", "sont", "à", "en", "pas", "c'est" needed for grammar). Words the learner learned personally come first — prefer them.
+CONTENT words (nouns, verbs, adjectives, adverbs) must come ONLY from this list. Words the learner learned personally come first — prefer them.
 ${allWords.join(", ")}
 ${patterns.length ? `\nFull expressions the learner knows: ${patterns.join(" | ")}` : ""}
+GRAMMAR MUST STILL BE CORRECT: you may freely use small grammar words (je, tu, il, elle, nous, vous, on, ça, c'est, est, sont, a, le, la, les, un, une, des, du, de, à, au, en, et, ou, ne...pas, y, mon, ma, ton, votre, son, ce, cette, très, bien) and you MUST conjugate listed verbs correctly (vouloir → vous voulez, pouvoir → je peux, aller → vous allez). Never write broken grammar like "vous vouloir" or "j'ai sœur" — always "vous voulez", "j'ai une sœur".
 If you cannot say something with these words, rephrase it using only them. Keep every message SHORT (max 1-2 sentences) so the learner can understand and reply.`;
 }
 
